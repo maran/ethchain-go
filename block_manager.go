@@ -29,7 +29,7 @@ type BlockChain struct {
 
 func NewBlockChain() *BlockChain {
 	bc := &BlockChain{}
-	bc.genesisBlock = NewBlock(ethutil.Encode(ethutil.Genesis))
+	bc.genesisBlock = NewBlock(ethutil.Encode(Genesis))
 
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
@@ -221,7 +221,7 @@ func (bm *BlockManager) AccumelateRewards(block *Block) error {
 	// Get the coinbase rlp data
 	d := block.State().Get(block.Coinbase)
 
-	ether := ethutil.NewEtherFromData([]byte(d))
+	ether := NewEtherFromData([]byte(d))
 
 	// Reward amount of ether to the coinbase address
 	ether.AddFee(CalculateBlockReward(block, len(block.Uncles)))
@@ -556,7 +556,7 @@ out:
 		case oBALANCE:
 			// Pushes the balance of the popped value on to the stack
 			d := block.State().Get(bm.stack.Pop().String())
-			ether := ethutil.NewEtherFromData([]byte(d))
+			ether := NewEtherFromData([]byte(d))
 			bm.stack.Push(ether.Amount)
 		case oMKTX:
 			value, addr := bm.stack.Popn()
@@ -569,7 +569,7 @@ out:
 				j++
 			}
 			// TODO sign it?
-			tx := ethutil.NewTransaction(string(addr.Bytes()), value, dataItems)
+			tx := NewTransaction(string(addr.Bytes()), value, dataItems)
 			// Add the transaction to the tx pool
 			bm.TransactionPool.QueueTransaction(tx)
 		case oSUICIDE:

@@ -44,6 +44,27 @@ func NewTransactionFromData(data []byte) *Transaction {
 	return tx
 }
 
+func NewTransactionFromRlpValue(rlpValue *ethutil.RlpValue) *Transaction {
+	tx := &Transaction{}
+
+	tx.Nonce = rlpValue.Get(0).AsString()
+	tx.Recipient = rlpValue.Get(1).AsString()
+	tx.Value = rlpValue.Get(2).AsBigInt()
+
+	d := rlpValue.Get(3)
+	tx.Data = make([]string, d.Length())
+	for i := 0; i < d.Length(); i++ {
+		tx.Data[i] = d.Get(i).AsString()
+	}
+
+	// TODO something going wrong here
+	tx.v = byte(rlpValue.Get(4).AsUint())
+	tx.r = []byte(rlpValue.Get(5).AsString())
+	tx.s = []byte(rlpValue.Get(6).AsString())
+
+	return tx
+}
+
 func (tx *Transaction) Hash() []byte {
 	preEnc := []interface{}{
 		tx.Nonce,
@@ -98,9 +119,9 @@ func (tx *Transaction) Sign(privk []byte) {
 	tx.v = sig[64] + 27
 }
 
-func (tx *Transaction) RlpEncode() []byte {
+func (tx *Transaction) RlpData() interface{} {
 	// Prepare the transaction for serialization
-	preEnc := []interface{}{
+	return []interface{}{
 		tx.Nonce,
 		tx.Recipient,
 		tx.Value,
@@ -109,8 +130,10 @@ func (tx *Transaction) RlpEncode() []byte {
 		tx.r,
 		tx.s,
 	}
+}
 
-	return ethutil.Encode(preEnc)
+func (tx *Transaction) RlpEncode() []byte {
+	return ethutil.Encode(tx.RlpData())
 }
 
 func (tx *Transaction) RlpDecode(data []byte) {

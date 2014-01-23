@@ -15,9 +15,9 @@ const (
 	txPoolQueueSize = 50
 )
 
-func FindTx(pool *list.List, finder func(*ethutil.Transaction, *list.Element) bool) *ethutil.Transaction {
+func FindTx(pool *list.List, finder func(*Transaction, *list.Element) bool) *Transaction {
 	for e := pool.Front(); e != nil; e = e.Next() {
-		if tx, ok := e.Value.(*ethutil.Transaction); ok {
+		if tx, ok := e.Value.(*Transaction); ok {
 			if finder(tx, e) {
 				return tx
 			}
@@ -28,7 +28,7 @@ func FindTx(pool *list.List, finder func(*ethutil.Transaction, *list.Element) bo
 }
 
 type PublicSpeaker interface {
-	Broadcast(msgType ethwire.MsgType, data []byte)
+	Broadcast(msgType ethwire.MsgType, data interface{})
 }
 
 // The tx pool a thread safe transaction pool handler. In order to
@@ -43,7 +43,7 @@ type TxPool struct {
 	mutex sync.Mutex
 	// Queueing channel for reading and writing incoming
 	// transactions to
-	queueChan chan *ethutil.Transaction
+	queueChan chan *Transaction
 	// Quiting channel
 	quit chan bool
 	// The actual pool
@@ -57,24 +57,24 @@ func NewTxPool() *TxPool {
 		//server:    s,
 		mutex:     sync.Mutex{},
 		pool:      list.New(),
-		queueChan: make(chan *ethutil.Transaction, txPoolQueueSize),
+		queueChan: make(chan *Transaction, txPoolQueueSize),
 		quit:      make(chan bool),
 	}
 }
 
 // Blocking function. Don't use directly. Use QueueTransaction instead
-func (pool *TxPool) addTransaction(tx *ethutil.Transaction) {
+func (pool *TxPool) addTransaction(tx *Transaction) {
 	pool.mutex.Lock()
 	pool.pool.PushBack(tx)
 	pool.mutex.Unlock()
 
 	// Broadcast the transaction to the rest of the peers
-	pool.Speaker.Broadcast(ethwire.MsgTxTy, tx.RlpEncode())
+	pool.Speaker.Broadcast(ethwire.MsgTxTy, tx.RlpData())
 }
 
 // Process transaction validates the Tx and processes funds from the
 // sender to the recipient.
-func (pool *TxPool) processTransaction(tx *ethutil.Transaction) error {
+func (pool *TxPool) processTransaction(tx *Transaction) error {
 	// Get the last block so we can retrieve the sender and receiver from
 	// the merkle trie
 	block := pool.BlockManager.bc.LastBlock
@@ -83,16 +83,16 @@ func (pool *TxPool) processTransaction(tx *ethutil.Transaction) error {
 		return errors.New("No last block on the block chain")
 	}
 
-	var sender, receiver *ethutil.Ether
+	var sender, receiver *Ether
 
 	// Get the sender
 	data := block.State().Get(string(tx.Sender()))
 	// If it doesn't exist create a new account. Of course trying to send funds
 	// from this account will fail since it will hold 0 Wei
 	if data == "" {
-		sender = ethutil.NewEther(big.NewInt(0))
+		sender = NewEther(big.NewInt(0))
 	} else {
-		sender = ethutil.NewEtherFromData([]byte(data))
+		sender = NewEtherFromData([]byte(data))
 	}
 	// Defer the update. Whatever happens it should be persisted
 	defer block.State().Update(string(tx.Sender()), string(sender.RlpEncode()))
@@ -119,9 +119,9 @@ func (pool *TxPool) processTransaction(tx *ethutil.Transaction) error {
 	// If the receiver doesn't exist yet, create a new account to which the
 	// funds will be send.
 	if data == "" {
-		receiver = ethutil.NewEther(big.NewInt(0))
+		receiver = NewEther(big.NewInt(0))
 	} else {
-		receiver = ethutil.NewEtherFromData([]byte(data))
+		receiver = NewEtherFromData([]byte(data))
 	}
 	// Defer the update
 	defer block.State().Update(tx.Recipient, string(receiver.RlpEncode()))
@@ -138,7 +138,7 @@ out:
 		select {
 		case tx := <-pool.queueChan:
 			hash := tx.Hash()
-			foundTx := FindTx(pool.pool, func(tx *ethutil.Transaction, e *list.Element) bool {
+			foundTx := FindTx(pool.pool, func(tx *Transaction, e *list.Element) bool {
 				return bytes.Compare(tx.Hash(), hash) == 0
 			})
 
@@ -161,7 +161,7 @@ out:
 	}
 }
 
-func (pool *TxPool) QueueTransaction(tx *ethutil.Transaction) {
+func (pool *TxPool) QueueTransaction(tx *Transaction) {
 	pool.queueChan <- tx
 }
 
