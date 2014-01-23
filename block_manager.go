@@ -13,18 +13,23 @@ import (
 	"time"
 )
 
+func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
+	// TODO
+	return big.NewInt(0)
+}
+
 type BlockChain struct {
 	// Last block
-	LastBlock *ethutil.Block
+	LastBlock *Block
 	// The famous, the fabulous Mister GENESIIIIIIS (block)
-	genesisBlock *ethutil.Block
+	genesisBlock *Block
 	// Last known total difficulty
 	TD *big.Int
 }
 
 func NewBlockChain() *BlockChain {
 	bc := &BlockChain{}
-	bc.genesisBlock = ethutil.NewBlock(ethutil.Encode(ethutil.Genesis))
+	bc.genesisBlock = NewBlock(ethutil.Encode(ethutil.Genesis))
 
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
@@ -40,7 +45,7 @@ func (bc *BlockChain) HasBlock(hash string) bool {
 	return len(data) != 0
 }
 
-func (bc *BlockChain) GenesisBlock() *ethutil.Block {
+func (bc *BlockChain) GenesisBlock() *Block {
 	return bc.genesisBlock
 }
 
@@ -76,7 +81,7 @@ func NewBlockManager() *BlockManager {
 }
 
 // Process a block.
-func (bm *BlockManager) ProcessBlock(block *ethutil.Block) error {
+func (bm *BlockManager) ProcessBlock(block *Block) error {
 	// Block validation
 	if err := bm.ValidateBlock(block); err != nil {
 		return err
@@ -119,22 +124,22 @@ func (bm *BlockManager) ProcessBlock(block *ethutil.Block) error {
 }
 
 // Unexported method for writing extra non-essential block info to the db
-func (bm *BlockManager) writeBlockInfo(block *ethutil.Block) {
-	bi := ethutil.BlockInfo{Number: bm.LastBlockNumber.Add(bm.LastBlockNumber, big.NewInt(1))}
+func (bm *BlockManager) writeBlockInfo(block *Block) {
+	bi := BlockInfo{Number: bm.LastBlockNumber.Add(bm.LastBlockNumber, big.NewInt(1))}
 
 	// For now we use the block hash with the words "info" appended as key
 	ethutil.Config.Db.Put(append(block.Hash(), []byte("Info")...), bi.RlpEncode())
 }
 
-func (bm *BlockManager) BlockInfo(block *ethutil.Block) ethutil.BlockInfo {
-	bi := ethutil.BlockInfo{}
+func (bm *BlockManager) BlockInfo(block *Block) BlockInfo {
+	bi := BlockInfo{}
 	data, _ := ethutil.Config.Db.Get(append(block.Hash(), []byte("Info")...))
 	bi.RlpDecode(data)
 
 	return bi
 }
 
-func (bm *BlockManager) CalculateTD(block *ethutil.Block) bool {
+func (bm *BlockManager) CalculateTD(block *Block) bool {
 	uncleDiff := new(big.Int)
 	for _, uncle := range block.Uncles {
 		uncleDiff = uncleDiff.Add(uncleDiff, uncle.Difficulty)
@@ -165,7 +170,7 @@ func (bm *BlockManager) CalculateTD(block *ethutil.Block) bool {
 // Validates the current block. Returns an error if the block was invalid,
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
-func (bm *BlockManager) ValidateBlock(block *ethutil.Block) error {
+func (bm *BlockManager) ValidateBlock(block *Block) error {
 	// Genesis block
 	if bm.bc.LastBlock == nil && block.PrevHash == "" {
 		return nil
@@ -212,14 +217,14 @@ func (bm *BlockManager) ValidateBlock(block *ethutil.Block) error {
 	return nil
 }
 
-func (bm *BlockManager) AccumelateRewards(block *ethutil.Block) error {
+func (bm *BlockManager) AccumelateRewards(block *Block) error {
 	// Get the coinbase rlp data
 	d := block.State().Get(block.Coinbase)
 
 	ether := ethutil.NewEtherFromData([]byte(d))
 
 	// Reward amount of ether to the coinbase address
-	ether.AddFee(ethutil.CalculateBlockReward(block, len(block.Uncles)))
+	ether.AddFee(CalculateBlockReward(block, len(block.Uncles)))
 	block.State().Update(block.Coinbase, string(ether.RlpEncode()))
 
 	// TODO Reward each uncle
@@ -227,7 +232,7 @@ func (bm *BlockManager) AccumelateRewards(block *ethutil.Block) error {
 	return nil
 }
 
-func (bm *BlockManager) ProcessContract(tx *ethutil.Transaction, block *ethutil.Block, lockChan chan bool) {
+func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block, lockChan chan bool) {
 	// Recovering function in case the VM had any errors
 	defer func() {
 		if r := recover(); r != nil {
@@ -252,7 +257,7 @@ func (bm *BlockManager) ProcessContract(tx *ethutil.Transaction, block *ethutil.
 }
 
 // Contract evaluation is done here.
-func (bm *BlockManager) ProcContract(tx *ethutil.Transaction, block *ethutil.Block, cb TxCallback) {
+func (bm *BlockManager) ProcContract(tx *Transaction, block *Block, cb TxCallback) {
 
 	// Instruction pointer
 	pc := 0
@@ -577,7 +582,7 @@ out:
 }
 
 // Returns an address from the specified contract's address
-func getContractMemory(block *ethutil.Block, contractAddr []byte, memAddr *big.Int) *big.Int {
+func getContractMemory(block *Block, contractAddr []byte, memAddr *big.Int) *big.Int {
 	contract := block.GetContract(contractAddr)
 	if contract == nil {
 		log.Panicf("invalid contract addr %x", contractAddr)
