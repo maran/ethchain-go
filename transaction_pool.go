@@ -103,7 +103,6 @@ func (pool *TxPool) processTransaction(tx *Transaction) error {
 		if ethutil.Config.Debug {
 			log.Printf("Insufficient amount (ETH: %v) in sender's (%x) account. Adding 1 ETH for debug\n", sender.Amount, tx.Sender())
 			sender.Amount = ethutil.BigPow(10, 18)
-			log.Println(sender.Amount)
 		} else {
 			return errors.New("Insufficient amount in sender's account")
 		}

@@ -96,20 +96,34 @@ func (bm *BlockManager) BlockChain() *BlockChain {
 	return bm.bc
 }
 
-// Process a block.
+// Helper for regularly block processing
 func (bm *BlockManager) ProcessBlock(block *Block) error {
+	return bm.ProcessBlockWithState(block, nil)
+}
+
+// Block processing and validating with a given (temporarily) state
+func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie) error {
 	if ethutil.Config.Debug {
 		log.Println("[BMGR] Processing block")
 	}
 
-	// Block validation
-	if err := bm.ValidateBlock(block); err != nil {
-		return err
+	//var state *ethutil.Trie
+	if state == nil {
+		if bm.bc.LastBlock == nil && block.PrevHash == "" {
+			state = block.State()
+		} else {
+			state = ethutil.NewTrie(ethutil.Config.Db, bm.bc.LastBlock.State().Root)
+		}
 	}
 
 	// I'm not sure, but I don't know if there should be thrown
 	// any errors at this time.
-	if err := bm.AccumelateRewards(block); err != nil {
+	if err := bm.AccumelateRewards(block, state); err != nil {
+		return err
+	}
+
+	// Block validation
+	if err := bm.ValidateBlock(block, state); err != nil {
 		return err
 	}
 
@@ -143,25 +157,7 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 
 	log.Printf("[BMGR] Added block (%x)\n", block.Hash())
 
-	//fmt.Println(ethutil.NewRlpValue(block.RlpData()).Get(0))
-
 	return nil
-}
-
-// Unexported method for writing extra non-essential block info to the db
-func (bm *BlockManager) writeBlockInfo(block *Block) {
-	bi := BlockInfo{Number: bm.LastBlockNumber.Add(bm.LastBlockNumber, big.NewInt(1))}
-
-	// For now we use the block hash with the words "info" appended as key
-	ethutil.Config.Db.Put(append(block.Hash(), []byte("Info")...), bi.RlpEncode())
-}
-
-func (bm *BlockManager) BlockInfo(block *Block) BlockInfo {
-	bi := BlockInfo{}
-	data, _ := ethutil.Config.Db.Get(append(block.Hash(), []byte("Info")...))
-	bi.RlpDecode(data)
-
-	return bi
 }
 
 func (bm *BlockManager) CalculateTD(block *Block) bool {
@@ -195,7 +191,7 @@ func (bm *BlockManager) CalculateTD(block *Block) bool {
 // Validates the current block. Returns an error if the block was invalid,
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
-func (bm *BlockManager) ValidateBlock(block *Block) error {
+func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
 	// Genesis block
 	if bm.bc.LastBlock == nil && block.PrevHash == "" {
 		return nil
@@ -236,24 +232,26 @@ func (bm *BlockManager) ValidateBlock(block *Block) error {
 		return errors.New("Block's nonce is invalid")
 	}
 
+	if block.State().Root != state.Root {
+		return fmt.Errorf("Invalid merkle root %x (%x)", block.State().Root, state.Root)
+	}
+
 	return nil
 }
 
-func (bm *BlockManager) AccumelateRewards(block *Block) error {
-	if ethutil.Config.Debug {
-		fmt.Println(block.String())
-		fmt.Printf("Adding rewards to %v\n", block.Coinbase)
-		fmt.Printf("Rewards. Merkle root %x\n", block.State().Root)
+func (bm *BlockManager) AccumelateRewards(block *Block, state *ethutil.Trie) error {
+	if block.PrevHash == "" && bm.bc.LastBlock == nil {
+		return nil
 	}
 
 	// Get the coinbase rlp data
-	d := block.State().Get(block.Coinbase)
+	d := bm.bc.LastBlock.State().Get(block.Coinbase)
 
 	ether := NewEtherFromData([]byte(d))
 
 	// Reward amount of ether to the coinbase address
 	ether.AddFee(CalculateBlockReward(block, len(block.Uncles)))
-	block.State().Update(block.Coinbase, string(ether.RlpEncode()))
+	bm.bc.LastBlock.State().Update(block.Coinbase, string(ether.RlpEncode()))
 
 	// TODO Reward each uncle
 
@@ -282,6 +280,22 @@ func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block, lockChan 
 
 	// Broadcast we're done
 	lockChan <- true
+}
+
+func (bm *BlockManager) BlockInfo(block *Block) BlockInfo {
+	bi := BlockInfo{}
+	data, _ := ethutil.Config.Db.Get(append(block.Hash(), []byte("Info")...))
+	bi.RlpDecode(data)
+
+	return bi
+}
+
+// Unexported method for writing extra non-essential block info to the db
+func (bm *BlockManager) writeBlockInfo(block *Block) {
+	bi := BlockInfo{Number: bm.LastBlockNumber.Add(bm.LastBlockNumber, big.NewInt(1))}
+
+	// For now we use the block hash with the words "info" appended as key
+	ethutil.Config.Db.Put(append(block.Hash(), []byte("Info")...), bi.RlpEncode())
 }
 
 // Contract evaluation is done here.

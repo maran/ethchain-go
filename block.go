@@ -174,17 +174,18 @@ func (block *Block) BlockInfo() BlockInfo {
 
 // Returns a hash of the block
 func (block *Block) Hash() []byte {
-	return ethutil.Sha256Bin(ethutil.Encode(block.header(block.TxSha, block.UncleSha)))
+	header, _, _ := block.Make()
+	return ethutil.Sha3Bin(ethutil.Encode(header))
 }
 
-func (block *Block) RlpData() interface{} {
+func (block *Block) Make() (interface{}, []string, interface{}) {
 	// Marshal the transactions of this block
 	encTx := make([]string, len(block.transactions))
 	for i, tx := range block.transactions {
 		// Cast it to a string (safe)
 		encTx[i] = string(tx.RlpEncode())
 	}
-	tsha := ethutil.Sha256Bin([]byte(ethutil.Encode(encTx)))
+	tsha := ethutil.Sha3Bin([]byte(ethutil.Encode(encTx)))
 
 	uncles := make([]interface{}, len(block.Uncles))
 	for i, uncle := range block.Uncles {
@@ -192,9 +193,14 @@ func (block *Block) RlpData() interface{} {
 	}
 
 	// Sha of the concatenated uncles
-	usha := ethutil.Sha256Bin(ethutil.Encode(uncles))
+	usha := ethutil.Sha3Bin(ethutil.Encode(uncles))
+
+	return block.header(tsha, usha), encTx, uncles
+}
+
+func (block *Block) RlpData() interface{} {
 	// The block header
-	header := block.header(tsha, usha)
+	header, encTx, uncles := block.Make()
 
 	return []interface{}{header, encTx, uncles}
 }
@@ -232,6 +238,10 @@ func (block *Block) RlpValueDecode(decoder *ethutil.RlpValue) {
 			tx := &Transaction{}
 			tx.RlpDecode(txes.Get(i).AsBytes())
 			block.transactions[i] = tx
+
+			if ethutil.Config.Debug {
+				ethutil.Config.Db.Put(tx.Hash(), ethutil.Encode(tx))
+			}
 		}
 
 	}
@@ -268,7 +278,7 @@ func (block *Block) MakeContracts() {
 }
 
 func (block *Block) String() string {
-	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%v\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%d\n", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce)
+	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%v\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%d", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce)
 }
 
 //////////// UNEXPORTED /////////////////
