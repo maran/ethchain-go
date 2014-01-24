@@ -10,6 +10,26 @@ import (
 	"time"
 )
 
+type PoW interface {
+	Search(hash, diff *big.Int) *big.Int
+	Verify(hash, diff, nonce *big.Int) bool
+}
+
+type EasyPow struct {
+	hash *big.Int
+}
+
+func (pow *EasyPow) Search(hash, diff *big.Int) *big.Int {
+	return nil
+}
+
+func (pow *EasyPow) Verify(hash, diff, nonce *big.Int) bool {
+	return true
+}
+
+func (pow *EasyPow) SetHash(hash *big.Int) {
+}
+
 type Dagger struct {
 	hash *big.Int
 	xn   *big.Int
@@ -67,6 +87,15 @@ func (dag *Dagger) Search(hash, diff *big.Int) *big.Int {
 	}
 
 	return big.NewInt(res)
+}
+
+func (dag *Dagger) Verify(hash, diff, nonce *big.Int) bool {
+	dag.hash = hash
+
+	obj := ethutil.BigPow(2, 256)
+	obj = obj.Div(obj, diff)
+
+	return dag.Eval(nonce).Cmp(obj) < 0
 }
 
 func DaggerVerify(hash, diff, nonce *big.Int) bool {
