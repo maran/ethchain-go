@@ -31,8 +31,10 @@ func NewTransaction(to string, value *big.Int, data []string) *Transaction {
 		tx.Data[i] = instr
 	}
 
-	// TMP
-	tx.Sign([]byte("privkey"))
+	if ethutil.Config.Debug {
+		// TMP
+		tx.Sign([]byte("privkey"))
+	}
 
 	return &tx
 }
@@ -57,7 +59,6 @@ func NewTransactionFromRlpValue(rlpValue *ethutil.RlpValue) *Transaction {
 		tx.Data[i] = d.Get(i).AsString()
 	}
 
-	// TODO something going wrong here
 	tx.v = byte(rlpValue.Get(4).AsUint())
 	tx.r = []byte(rlpValue.Get(5).AsString())
 	tx.s = []byte(rlpValue.Get(6).AsString())
@@ -73,7 +74,7 @@ func (tx *Transaction) Hash() []byte {
 		tx.Data,
 	}
 
-	return ethutil.Sha256Bin(ethutil.Encode(preEnc))
+	return ethutil.Sha3Bin(ethutil.Encode(preEnc))
 }
 
 func (tx *Transaction) IsContract() bool {
@@ -81,8 +82,8 @@ func (tx *Transaction) IsContract() bool {
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {
-	hash := ethutil.Sha256Bin(tx.Hash())
-	sec := ethutil.Sha256Bin(key)
+	hash := ethutil.Sha3Bin(tx.Hash())
+	sec := ethutil.Sha3Bin(key)
 
 	sig, _ := secp256k1.Sign(hash, sec)
 
@@ -90,7 +91,7 @@ func (tx *Transaction) Signature(key []byte) []byte {
 }
 
 func (tx *Transaction) PublicKey() []byte {
-	hash := ethutil.Sha256Bin(tx.Hash())
+	hash := ethutil.Sha3Bin(tx.Hash())
 	sig := append(tx.r, tx.s...)
 	sig = append(sig, tx.v-27)
 
@@ -108,7 +109,7 @@ func (tx *Transaction) Sender() []byte {
 		return nil
 	}
 
-	return ethutil.Sha256Bin(pubkey[1:65])[12:]
+	return ethutil.Sha3Bin(pubkey)[12:]
 }
 
 func (tx *Transaction) Sign(privk []byte) {

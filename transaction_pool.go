@@ -91,18 +91,19 @@ func (pool *TxPool) processTransaction(tx *Transaction) error {
 	// from this account will fail since it will hold 0 Wei
 	if data == "" {
 		sender = NewEther(big.NewInt(0))
+		// Create a new account for this sender
+		block.State().Update(string(tx.Sender()), string(sender.RlpEncode()))
 	} else {
 		sender = NewEtherFromData([]byte(data))
 	}
-	// Defer the update. Whatever happens it should be persisted
-	defer block.State().Update(string(tx.Sender()), string(sender.RlpEncode()))
 
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
 	if sender.Amount.Cmp(tx.Value) < 0 {
 		if ethutil.Config.Debug {
-			log.Println("Insufficient amount in sender's account. Adding 1 ETH for debug")
+			log.Printf("Insufficient amount (ETH: %v) in sender's (%x) account. Adding 1 ETH for debug\n", sender.Amount, tx.Sender())
 			sender.Amount = ethutil.BigPow(10, 18)
+			log.Println(sender.Amount)
 		} else {
 			return errors.New("Insufficient amount in sender's account")
 		}
@@ -120,14 +121,16 @@ func (pool *TxPool) processTransaction(tx *Transaction) error {
 	// funds will be send.
 	if data == "" {
 		receiver = NewEther(big.NewInt(0))
+		// Create a new account for the recipient
+		block.State().Update(tx.Recipient, string(receiver.RlpEncode()))
 	} else {
 		receiver = NewEtherFromData([]byte(data))
 	}
-	// Defer the update
-	defer block.State().Update(tx.Recipient, string(receiver.RlpEncode()))
-
 	// Add the amount to receivers account which should conclude this transaction
 	receiver.Amount.Add(receiver.Amount, tx.Value)
+
+	block.State().Update(string(tx.Sender()), string(sender.RlpEncode()))
+	block.State().Update(tx.Recipient, string(receiver.RlpEncode()))
 
 	return nil
 }
@@ -165,10 +168,21 @@ func (pool *TxPool) QueueTransaction(tx *Transaction) {
 	pool.queueChan <- tx
 }
 
-func (pool *TxPool) Flush() {
+func (pool *TxPool) Flush() []*Transaction {
 	pool.mutex.Lock()
-
 	defer pool.mutex.Unlock()
+
+	txList := make([]*Transaction, pool.pool.Len())
+	i := 0
+	for e := pool.pool.Front(); e != nil; e = e.Next() {
+		if tx, ok := e.Value.(*Transaction); ok {
+			txList[i] = tx
+		}
+
+		i++
+	}
+
+	return txList
 }
 
 func (pool *TxPool) Start() {
