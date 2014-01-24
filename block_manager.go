@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/ethutil-go"
+	_ "github.com/ethereum/ethwire-go"
 	"github.com/obscuren/secp256k1-go"
 	"log"
 	"math"
@@ -15,7 +16,7 @@ import (
 
 func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
 	// TODO
-	return big.NewInt(0)
+	return big.NewInt(1000000000)
 }
 
 type BlockChain struct {
@@ -29,13 +30,13 @@ type BlockChain struct {
 
 func NewBlockChain() *BlockChain {
 	bc := &BlockChain{}
-	bc.genesisBlock = NewBlock(ethutil.Encode(Genesis))
+	bc.genesisBlock = NewBlockFromData(ethutil.Encode(Genesis))
 
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
 
 	// TODO get last block from the database
-	bc.LastBlock = bc.genesisBlock
+	//bc.LastBlock = bc.genesisBlock
 
 	return bc
 }
@@ -56,6 +57,7 @@ type BlockManager struct {
 
 	// Last known block number
 	LastBlockNumber *big.Int
+	LastBlockHash   []byte
 
 	// Stack for processing contracts
 	stack *Stack
@@ -63,14 +65,24 @@ type BlockManager struct {
 	mem map[string]*big.Int
 
 	TransactionPool *TxPool
+
+	Pow PoW
+
+	Speaker PublicSpeaker
 }
 
-func NewBlockManager() *BlockManager {
+func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 	bm := &BlockManager{
 		//server: s,
-		bc:    NewBlockChain(),
-		stack: NewStack(),
-		mem:   make(map[string]*big.Int),
+		bc:      NewBlockChain(),
+		stack:   NewStack(),
+		mem:     make(map[string]*big.Int),
+		Pow:     &EasyPow{},
+		Speaker: speaker,
+	}
+
+	if bm.bc.LastBlock == nil {
+		bm.ProcessBlock(bm.bc.genesisBlock)
 	}
 
 	// Set the last known block number based on the blockchains last
@@ -80,8 +92,16 @@ func NewBlockManager() *BlockManager {
 	return bm
 }
 
+func (bm *BlockManager) BlockChain() *BlockChain {
+	return bm.bc
+}
+
 // Process a block.
 func (bm *BlockManager) ProcessBlock(block *Block) error {
+	if ethutil.Config.Debug {
+		log.Println("[BMGR] Processing block")
+	}
+
 	// Block validation
 	if err := bm.ValidateBlock(block); err != nil {
 		return err
@@ -118,7 +138,12 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 	if bm.CalculateTD(block) {
 		ethutil.Config.Db.Put(block.Hash(), block.RlpEncode())
 		bm.bc.LastBlock = block
+		bm.LastBlockHash = block.Hash()
 	}
+
+	log.Printf("[BMGR] Added block (%x)\n", block.Hash())
+
+	//fmt.Println(ethutil.NewRlpValue(block.RlpData()).Get(0))
 
 	return nil
 }
@@ -152,7 +177,7 @@ func (bm *BlockManager) CalculateTD(block *Block) bool {
 
 	// The new TD will only be accepted if the new difficulty is
 	// is greater than the previous.
-	if td.Cmp(bm.bc.TD) > 0 {
+	if td.Cmp(bm.bc.TD) > 0 || (bm.bc.LastBlock == nil && block.PrevHash == "") {
 		bm.bc.LastBlock = block
 		// Set the new total difficulty back to the block chain
 		bm.bc.TD = td
@@ -181,7 +206,7 @@ func (bm *BlockManager) ValidateBlock(block *Block) error {
 	// Check if we have the parent hash, if it isn't known we discard it
 	// Reasons might be catching up or simply an invalid block
 	if !bm.bc.HasBlock(block.PrevHash) {
-		return errors.New("Block's parent unknown")
+		return fmt.Errorf("Block's parent unknown %x", block.PrevHash)
 	}
 
 	// Check each uncle's previous hash. In order for it to be valid
@@ -207,17 +232,20 @@ func (bm *BlockManager) ValidateBlock(block *Block) error {
 	}
 
 	// Verify the nonce of the block. Return an error if it's not valid
-	if !DaggerVerify(ethutil.BigD(block.Hash()), block.Difficulty, block.Nonce) {
-
+	if !bm.Pow.Verify(ethutil.BigD(block.Hash()), block.Difficulty, block.Nonce) {
 		return errors.New("Block's nonce is invalid")
 	}
-
-	log.Println("Block validation PASSED")
 
 	return nil
 }
 
 func (bm *BlockManager) AccumelateRewards(block *Block) error {
+	if ethutil.Config.Debug {
+		fmt.Println(block.String())
+		fmt.Printf("Adding rewards to %v\n", block.Coinbase)
+		fmt.Printf("Rewards. Merkle root %x\n", block.State().Root)
+	}
+
 	// Get the coinbase rlp data
 	d := block.State().Get(block.Coinbase)
 
