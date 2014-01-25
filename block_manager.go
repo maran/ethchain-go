@@ -275,7 +275,7 @@ func (bm *BlockManager) AccumelateRewards(block *Block, state *ethutil.Trie) err
 	// Get the coinbase rlp data
 	d := state.Get(block.Coinbase)
 
-	ether := NewEtherFromData([]byte(d))
+	ether := NewAddressFromData([]byte(d))
 
 	// Reward amount of ether to the coinbase address
 	ether.AddFee(CalculateBlockReward(block, len(block.Uncles)))
@@ -628,7 +628,7 @@ out:
 		case oBALANCE:
 			// Pushes the balance of the popped value on to the stack
 			d := block.State().Get(bm.stack.Pop().String())
-			ether := NewEtherFromData([]byte(d))
+			ether := NewAddressFromData([]byte(d))
 			bm.stack.Push(ether.Amount)
 		case oMKTX:
 			value, addr := bm.stack.Popn()

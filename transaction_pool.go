@@ -78,18 +78,18 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) error {
 	log.Printf("[TXPL] Processing Tx %x\n", tx.Hash())
 
-	var sender, receiver *Ether
+	var sender, receiver *Address
 
 	// Get the sender
 	data := block.State().Get(string(tx.Sender()))
 	// If it doesn't exist create a new account. Of course trying to send funds
 	// from this account will fail since it will hold 0 Wei
 	if data == "" {
-		sender = NewEther(big.NewInt(0))
+		sender = NewAddress(big.NewInt(0))
 		// Create a new account for this sender
 		block.State().Update(string(tx.Sender()), string(sender.RlpEncode()))
 	} else {
-		sender = NewEtherFromData([]byte(data))
+		sender = NewAddressFromData([]byte(data))
 	}
 
 	// Make sure there's enough in the sender's account. Having insufficient
@@ -114,11 +114,11 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) error {
 	// If the receiver doesn't exist yet, create a new account to which the
 	// funds will be send.
 	if data == "" {
-		receiver = NewEther(big.NewInt(0))
+		receiver = NewAddress(big.NewInt(0))
 		// Create a new account for the recipient
 		block.State().Update(tx.Recipient, string(receiver.RlpEncode()))
 	} else {
-		receiver = NewEtherFromData([]byte(data))
+		receiver = NewAddressFromData([]byte(data))
 	}
 	// Add the amount to receivers account which should conclude this transaction
 	receiver.Amount.Add(receiver.Amount, tx.Value)
@@ -138,16 +138,16 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 		return errors.New("No last block on the block chain")
 	}
 
-	var sender *Ether
+	var sender *Address
 
 	// Get the sender
 	data := block.State().Get(string(tx.Sender()))
 	// If it doesn't exist create a new account. Of course trying to send funds
 	// from this account will fail since it will hold 0 Wei
 	if data == "" {
-		sender = NewEther(big.NewInt(0))
+		sender = NewAddress(big.NewInt(0))
 	} else {
-		sender = NewEtherFromData([]byte(data))
+		sender = NewAddressFromData([]byte(data))
 	}
 
 	// Make sure there's enough in the sender's account. Having insufficient

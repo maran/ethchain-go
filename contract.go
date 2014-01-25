@@ -34,33 +34,33 @@ func (c *Contract) State() *ethutil.Trie {
 	return c.state
 }
 
-type Ether struct {
+type Address struct {
 	Amount *big.Int
 	Nonce  uint64
 }
 
-func NewEther(amount *big.Int) *Ether {
-	return &Ether{Amount: amount, Nonce: 0}
+func NewAddress(amount *big.Int) *Address {
+	return &Address{Amount: amount, Nonce: 0}
 }
 
-func NewEtherFromData(data []byte) *Ether {
-	ether := &Ether{}
-	ether.RlpDecode(data)
+func NewAddressFromData(data []byte) *Address {
+	address := &Address{}
+	address.RlpDecode(data)
 
-	return ether
+	return address
 }
 
-func (e *Ether) AddFee(fee *big.Int) {
-	e.Amount = e.Amount.Add(e.Amount, fee)
+func (a *Address) AddFee(fee *big.Int) {
+	a.Amount = a.Amount.Add(a.Amount, fee)
 }
 
-func (e *Ether) RlpEncode() []byte {
-	return ethutil.Encode([]interface{}{e.Amount, e.Nonce, ""})
+func (a *Address) RlpEncode() []byte {
+	return ethutil.Encode([]interface{}{a.Amount, a.Nonce, ""})
 }
 
-func (e *Ether) RlpDecode(data []byte) {
+func (a *Address) RlpDecode(data []byte) {
 	decoder := ethutil.NewRlpDecoder(data)
 
-	e.Amount = decoder.Get(1).AsBigInt()
-	e.Nonce = decoder.Get(2).AsUint()
+	a.Amount = decoder.Get(1).AsBigInt()
+	a.Nonce = decoder.Get(2).AsUint()
 }
