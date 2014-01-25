@@ -20,8 +20,6 @@ func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
 }
 
 type BlockChain struct {
-	// Last block
-	LastBlock *Block
 	// The famous, the fabulous Mister GENESIIIIIIS (block)
 	genesisBlock *Block
 	// Last known total difficulty
@@ -34,9 +32,6 @@ func NewBlockChain() *BlockChain {
 
 	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
 	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
-
-	// TODO get last block from the database
-	//bc.LastBlock = bc.genesisBlock
 
 	return bc
 }
@@ -58,6 +53,8 @@ type BlockManager struct {
 	// Last known block number
 	LastBlockNumber *big.Int
 	LastBlockHash   []byte
+
+	CurrentBlock *Block
 
 	// Stack for processing contracts
 	stack *Stack
@@ -81,19 +78,21 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 		Speaker: speaker,
 	}
 
-	if bm.bc.LastBlock == nil {
+	// TODO Find the last block
+
+	// For now always the case
+	if bm.CurrentBlock == nil {
 		// Prepare the genesis block
 		bm.LastBlockNumber = big.NewInt(0)
-		bm.bc.LastBlock = bm.bc.genesisBlock
+		bm.CurrentBlock = bm.bc.genesisBlock
 		bm.LastBlockHash = bm.bc.genesisBlock.Hash()
 
-		ethutil.Config.Db.Put(bm.bc.LastBlock.Hash(), bm.bc.LastBlock.RlpEncode())
-		bm.writeBlockInfo(bm.bc.LastBlock)
+		ethutil.Config.Db.Put(bm.CurrentBlock.Hash(), bm.CurrentBlock.RlpEncode())
+		bm.writeBlockInfo(bm.CurrentBlock)
 	}
 
-	// Set the last known block number based on the blockchains last
-	// block
-	bm.LastBlockNumber = bm.BlockInfo(bm.bc.LastBlock).Number
+	// Set the last known block number based on the blockchains last block
+	bm.LastBlockNumber = bm.BlockInfo(bm.CurrentBlock).Number
 
 	return bm
 }
@@ -125,9 +124,15 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 
 	var processor *Block
 	if state == nil {
-		blockData, _ := ethutil.Config.Db.Get([]byte(block.PrevHash))
-		processor = NewBlockFromData(blockData)
+		// Get the last block
+		//blockData, _ := ethutil.Config.Db.Get([]byte(block.PrevHash))
+		// Set the previous block as the processor when processing
+		// Txs and contracts
+		processor = bm.CurrentBlock //NewBlockFromData(blockData)
+		// Set the state for processing
+		state = processor.State()
 	} else {
+		// This is mostly used while mining blocks
 		processor = block
 	}
 
@@ -156,10 +161,6 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 		<-lockChan
 	}
 
-	if state == nil {
-		state = processor.State()
-	}
-
 	// I'm not sure, but I don't know if there should be thrown
 	// any errors at this time.
 	if err := bm.AccumelateRewards(block, state); err != nil {
@@ -174,7 +175,7 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 	// Calculate the new total difficulty and sync back to the db
 	if bm.CalculateTD(block) {
 		ethutil.Config.Db.Put(block.Hash(), block.RlpEncode())
-		bm.bc.LastBlock = block
+		bm.CurrentBlock = block
 		bm.LastBlockHash = block.Hash()
 
 		/*
@@ -215,14 +216,13 @@ func (bm *BlockManager) CalculateTD(block *Block) bool {
 
 	// The new TD will only be accepted if the new difficulty is
 	// is greater than the previous.
-	if td.Cmp(bm.bc.TD) > 0 || (bm.bc.LastBlock == nil && block.PrevHash == "") {
-		bm.bc.LastBlock = block
+	if td.Cmp(bm.bc.TD) > 0 {
 		// Set the new total difficulty back to the block chain
 		bm.bc.TD = td
 
-		//if Debug {
-		//		log.Println("TD(block) =", td)
-		//	}
+		if ethutil.Config.Debug {
+			log.Println("[BMGR] TD(block) =", td)
+		}
 
 		return true
 	}
@@ -234,10 +234,6 @@ func (bm *BlockManager) CalculateTD(block *Block) bool {
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
 func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
-	// Genesis block
-	if bm.bc.LastBlock == nil && block.PrevHash == "" {
-		return nil
-	}
 	// TODO
 	// 2. Check if the difficulty is correct
 
@@ -253,7 +249,7 @@ func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
 		}
 	}
 
-	diff := block.Time - bm.bc.LastBlock.Time
+	diff := block.Time - bm.CurrentBlock.Time
 	if diff < 0 {
 		return fmt.Errorf("Block timestamp less then prev block %v", diff)
 	}
@@ -276,10 +272,6 @@ func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
 }
 
 func (bm *BlockManager) AccumelateRewards(block *Block, state *ethutil.Trie) error {
-	if block.PrevHash == "" && bm.bc.LastBlock == nil {
-		return nil
-	}
-
 	// Get the coinbase rlp data
 	d := state.Get(block.Coinbase)
 

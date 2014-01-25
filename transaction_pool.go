@@ -132,7 +132,7 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) error {
 func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 	// Get the last block so we can retrieve the sender and receiver from
 	// the merkle trie
-	block := pool.BlockManager.bc.LastBlock
+	block := pool.BlockManager.CurrentBlock
 	// Something has gone horribly wrong if this happens
 	if block == nil {
 		return errors.New("No last block on the block chain")
