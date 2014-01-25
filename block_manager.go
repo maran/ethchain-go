@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/ethutil-go"
-	_ "github.com/ethereum/ethwire-go"
+	"github.com/ethereum/ethwire-go"
 	"github.com/obscuren/secp256k1-go"
 	"log"
 	"math"
@@ -82,7 +82,13 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 	}
 
 	if bm.bc.LastBlock == nil {
-		bm.ProcessBlock(bm.bc.genesisBlock)
+		// Prepare the genesis block
+		bm.LastBlockNumber = big.NewInt(0)
+		bm.bc.LastBlock = bm.bc.genesisBlock
+		bm.LastBlockHash = bm.bc.genesisBlock.Hash()
+
+		ethutil.Config.Db.Put(bm.bc.LastBlock.Hash(), bm.bc.LastBlock.RlpEncode())
+		bm.writeBlockInfo(bm.bc.LastBlock)
 	}
 
 	// Set the last known block number based on the blockchains last
@@ -107,24 +113,22 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 		log.Println("[BMGR] Processing block")
 	}
 
-	//var state *ethutil.Trie
+	if bm.bc.HasBlock(string(block.Hash())) {
+		return nil
+	}
+
+	// Check if we have the parent hash, if it isn't known we discard it
+	// Reasons might be catching up or simply an invalid block
+	if !bm.bc.HasBlock(block.PrevHash) {
+		return fmt.Errorf("Block's parent unknown %x", block.PrevHash)
+	}
+
+	var processor *Block
 	if state == nil {
-		if bm.bc.LastBlock == nil && block.PrevHash == "" {
-			state = block.State()
-		} else {
-			state = ethutil.NewTrie(ethutil.Config.Db, bm.bc.LastBlock.State().Root)
-		}
-	}
-
-	// I'm not sure, but I don't know if there should be thrown
-	// any errors at this time.
-	if err := bm.AccumelateRewards(block, state); err != nil {
-		return err
-	}
-
-	// Block validation
-	if err := bm.ValidateBlock(block, state); err != nil {
-		return err
+		blockData, _ := ethutil.Config.Db.Get([]byte(block.PrevHash))
+		processor = NewBlockFromData(blockData)
+	} else {
+		processor = block
 	}
 
 	// Get the tx count. Used to create enough channels to 'join' the go routines
@@ -139,7 +143,10 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 			go bm.ProcessContract(tx, block, lockChan)
 		} else {
 			// "finish" tx which isn't a contract
-			lockChan <- true
+			go func() {
+				bm.TransactionPool.ProcessTransaction(tx, processor)
+				lockChan <- true
+			}()
 		}
 	}
 
@@ -148,11 +155,44 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 		<-lockChan
 	}
 
+	if state == nil {
+		state = processor.State()
+	}
+
+	// I'm not sure, but I don't know if there should be thrown
+	// any errors at this time.
+	if err := bm.AccumelateRewards(block, state); err != nil {
+		return err
+	}
+
+	// Block validation
+	if err := bm.ValidateBlock(block, state); err != nil {
+		return err
+	}
+
 	// Calculate the new total difficulty and sync back to the db
 	if bm.CalculateTD(block) {
 		ethutil.Config.Db.Put(block.Hash(), block.RlpEncode())
 		bm.bc.LastBlock = block
 		bm.LastBlockHash = block.Hash()
+
+		/*
+			txs := bm.TransactionPool.Flush()
+			var coded = []interface{}{}
+			for _, tx := range txs {
+				err := bm.TransactionPool.ValidateTransaction(tx)
+				if err == nil {
+					coded = append(coded, tx.RlpEncode())
+				}
+			}
+		*/
+
+		bm.Speaker.Broadcast(ethwire.MsgBlockTy, block.RlpData())
+		/*
+			if len(coded) != 0 {
+					bm.Speaker.Broadcast(ethwire.MsgTxTy, coded)
+			}
+		*/
 	}
 
 	log.Printf("[BMGR] Added block (%x)\n", block.Hash())
@@ -199,12 +239,6 @@ func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
 	// TODO
 	// 2. Check if the difficulty is correct
 
-	// Check if we have the parent hash, if it isn't known we discard it
-	// Reasons might be catching up or simply an invalid block
-	if !bm.bc.HasBlock(block.PrevHash) {
-		return fmt.Errorf("Block's parent unknown %x", block.PrevHash)
-	}
-
 	// Check each uncle's previous hash. In order for it to be valid
 	// is if it has the same block hash as the current
 	for _, uncle := range block.Uncles {
@@ -245,13 +279,13 @@ func (bm *BlockManager) AccumelateRewards(block *Block, state *ethutil.Trie) err
 	}
 
 	// Get the coinbase rlp data
-	d := bm.bc.LastBlock.State().Get(block.Coinbase)
+	d := state.Get(block.Coinbase)
 
 	ether := NewEtherFromData([]byte(d))
 
 	// Reward amount of ether to the coinbase address
 	ether.AddFee(CalculateBlockReward(block, len(block.Uncles)))
-	bm.bc.LastBlock.State().Update(block.Coinbase, string(ether.RlpEncode()))
+	state.Update(block.Coinbase, string(ether.RlpEncode()))
 
 	// TODO Reward each uncle
 

@@ -7,7 +7,7 @@ import (
 )
 
 type Transaction struct {
-	Nonce     string
+	Nonce     uint64
 	Recipient string
 	Value     *big.Int
 	Data      []string
@@ -18,7 +18,7 @@ type Transaction struct {
 
 func NewTransaction(to string, value *big.Int, data []string) *Transaction {
 	tx := Transaction{Recipient: to, Value: value}
-	tx.Nonce = "0"
+	tx.Nonce = 0
 
 	// Serialize the data
 	tx.Data = make([]string, len(data))
@@ -49,7 +49,7 @@ func NewTransactionFromData(data []byte) *Transaction {
 func NewTransactionFromRlpValue(rlpValue *ethutil.RlpValue) *Transaction {
 	tx := &Transaction{}
 
-	tx.Nonce = rlpValue.Get(0).AsString()
+	tx.Nonce = rlpValue.Get(0).AsUint()
 	tx.Recipient = rlpValue.Get(1).AsString()
 	tx.Value = rlpValue.Get(2).AsBigInt()
 
@@ -140,7 +140,7 @@ func (tx *Transaction) RlpEncode() []byte {
 func (tx *Transaction) RlpDecode(data []byte) {
 	decoder := ethutil.NewRlpDecoder(data)
 
-	tx.Nonce = decoder.Get(0).AsString()
+	tx.Nonce = decoder.Get(0).AsUint()
 	tx.Recipient = decoder.Get(1).AsString()
 	tx.Value = decoder.Get(2).AsBigInt()
 

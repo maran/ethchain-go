@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"errors"
+	"fmt"
 	"github.com/ethereum/ethutil-go"
 	"github.com/ethereum/ethwire-go"
 	"log"
@@ -74,14 +75,8 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 
 // Process transaction validates the Tx and processes funds from the
 // sender to the recipient.
-func (pool *TxPool) processTransaction(tx *Transaction) error {
-	// Get the last block so we can retrieve the sender and receiver from
-	// the merkle trie
-	block := pool.BlockManager.bc.LastBlock
-	// Something has gone horribly wrong if this happens
-	if block == nil {
-		return errors.New("No last block on the block chain")
-	}
+func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) error {
+	log.Printf("[TXPL] Processing Tx %x\n", tx.Hash())
 
 	var sender, receiver *Ether
 
@@ -134,6 +129,48 @@ func (pool *TxPool) processTransaction(tx *Transaction) error {
 	return nil
 }
 
+func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
+	// Get the last block so we can retrieve the sender and receiver from
+	// the merkle trie
+	block := pool.BlockManager.bc.LastBlock
+	// Something has gone horribly wrong if this happens
+	if block == nil {
+		return errors.New("No last block on the block chain")
+	}
+
+	var sender *Ether
+
+	// Get the sender
+	data := block.State().Get(string(tx.Sender()))
+	// If it doesn't exist create a new account. Of course trying to send funds
+	// from this account will fail since it will hold 0 Wei
+	if data == "" {
+		sender = NewEther(big.NewInt(0))
+	} else {
+		sender = NewEtherFromData([]byte(data))
+	}
+
+	// Make sure there's enough in the sender's account. Having insufficient
+	// funds won't invalidate this transaction but simple ignores it.
+	if sender.Amount.Cmp(tx.Value) < 0 {
+		if ethutil.Config.Debug {
+			log.Printf("Insufficient amount (ETH: %v) in sender's (%x) account. Adding 1 ETH for debug\n", sender.Amount, tx.Sender())
+		} else {
+			return errors.New("Insufficient amount in sender's account")
+		}
+	}
+
+	if sender.Nonce != tx.Nonce {
+		if ethutil.Config.Debug {
+			return fmt.Errorf("Invalid nonce %d(%d) continueing anyway", tx.Nonce, sender.Nonce)
+		} else {
+			return fmt.Errorf("Invalid nonce %d(%d)", tx.Nonce, sender.Nonce)
+		}
+	}
+
+	return nil
+}
+
 func (pool *TxPool) queueHandler() {
 out:
 	for {
@@ -148,10 +185,12 @@ out:
 				break
 			}
 
-			// Process the transaction
-			err := pool.processTransaction(tx)
+			// Validate the transaction
+			err := pool.ValidateTransaction(tx)
 			if err != nil {
-				log.Println("Error processing Tx", err)
+				if ethutil.Config.Debug {
+					log.Println("Validating Tx failed", err)
+				}
 			} else {
 				// Call blocking version. At this point it
 				// doesn't matter since this is a goroutine
@@ -180,6 +219,10 @@ func (pool *TxPool) Flush() []*Transaction {
 
 		i++
 	}
+
+	// Recreate a new list all together
+	// XXX Is this the fastest way?
+	pool.pool = list.New()
 
 	return txList
 }
