@@ -12,7 +12,7 @@ type Contract struct {
 }
 
 func NewContract(Amount *big.Int, root []byte) *Contract {
-	contract := &Contract{Amount: Amount}
+	contract := &Contract{Amount: Amount, Nonce: 0}
 	contract.state = ethutil.NewTrie(ethutil.Config.Db, string(root))
 
 	return contract

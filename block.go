@@ -97,18 +97,7 @@ func CreateBlock(root string,
 	block.state = ethutil.NewTrie(ethutil.Config.Db, root)
 
 	for _, tx := range txes {
-		// Create contract if there's no recipient
-		if tx.IsContract() {
-			addr := tx.Hash()
-
-			value := tx.Value
-			contract := NewContract(value, []byte(""))
-			block.state.Update(string(addr), string(contract.RlpEncode()))
-			for i, val := range tx.Data {
-				contract.state.Update(string(ethutil.NumberToBytes(uint64(i), 32)), val)
-			}
-			block.UpdateContract(addr, contract)
-		}
+		block.MakeContract(tx)
 	}
 
 	return block
@@ -260,20 +249,18 @@ func (block *Block) RlpValueDecode(decoder *ethutil.RlpValue) {
 
 }
 
-func (block *Block) MakeContracts() {
-	for _, tx := range block.transactions {
-		// Create contract if there's no recipient
-		if tx.IsContract() {
-			addr := tx.Hash()
+func (block *Block) MakeContract(tx *Transaction) {
+	// Create contract if there's no recipient
+	if tx.IsContract() {
+		addr := tx.Hash()
 
-			value := tx.Value
-			contract := NewContract(value, []byte(""))
-			block.state.Update(string(addr), string(contract.RlpEncode()))
-			for i, val := range tx.Data {
-				contract.state.Update(string(ethutil.NumberToBytes(uint64(i), 32)), val)
-			}
-			block.UpdateContract(addr, contract)
+		value := tx.Value
+		contract := NewContract(value, []byte(""))
+		block.state.Update(string(addr), string(contract.RlpEncode()))
+		for i, val := range tx.Data {
+			contract.state.Update(string(ethutil.NumberToBytes(uint64(i), 32)), val)
 		}
+		block.UpdateContract(addr, contract)
 	}
 }
 

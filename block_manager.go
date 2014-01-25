@@ -109,12 +109,12 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 
 // Block processing and validating with a given (temporarily) state
 func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie) error {
-	if ethutil.Config.Debug {
-		log.Println("[BMGR] Processing block")
-	}
-
 	if bm.bc.HasBlock(string(block.Hash())) {
 		return nil
+	}
+
+	if ethutil.Config.Debug {
+		log.Println("[BMGR] Processing block")
 	}
 
 	// Check if we have the parent hash, if it isn't known we discard it
@@ -140,6 +140,7 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 	for _, tx := range block.Transactions() {
 		// If there's no recipient, it's a contract
 		if tx.IsContract() {
+			processor.MakeContract(tx)
 			go bm.ProcessContract(tx, block, lockChan)
 		} else {
 			// "finish" tx which isn't a contract
@@ -187,6 +188,7 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 			}
 		*/
 
+		// Broadcast the valid block back to the wire
 		bm.Speaker.Broadcast(ethwire.MsgBlockTy, block.RlpData())
 		/*
 			if len(coded) != 0 {
@@ -347,7 +349,9 @@ func (bm *BlockManager) ProcContract(tx *Transaction, block *Block, cb TxCallbac
 
 	Pow256 := ethutil.BigPow(2, 256)
 
-	//fmt.Printf("#   op   arg\n")
+	if ethutil.Config.Debug {
+		fmt.Printf("#   op   arg\n")
+	}
 out:
 	for {
 		// The base big int for all calculations. Use this for any results.
@@ -363,9 +367,9 @@ out:
 			break
 		}
 
-		//if Debug {
-		//fmt.Printf("%-3d %-4s\n", pc, op.String())
-		//}
+		if ethutil.Config.Debug {
+			fmt.Printf("%-3d %-4s\n", pc, op.String())
+		}
 
 		switch op {
 		case oSTOP:
@@ -653,8 +657,6 @@ out:
 		}
 		pc++
 	}
-
-	bm.stack.Print()
 }
 
 // Returns an address from the specified contract's address
