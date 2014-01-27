@@ -12,13 +12,13 @@ var GenisisHeader = []interface{}{
 	// Previous hash (none)
 	"",
 	// Sha of uncles
-	string(ethutil.Sha256Bin(ethutil.Encode([]interface{}{}))),
+	string(ethutil.Sha3Bin(ethutil.Encode([]interface{}{}))),
 	// Coinbase
 	"",
 	// Root state
 	"",
 	// Sha of transactions
-	string(ethutil.Sha256Bin(ethutil.Encode([]interface{}{}))),
+	string(ethutil.Sha3Bin(ethutil.Encode([]interface{}{}))),
 	// Difficulty
 	ethutil.BigPow(2, 26),
 	// Time

@@ -89,6 +89,8 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 
 		ethutil.Config.Db.Put(bm.CurrentBlock.Hash(), bm.CurrentBlock.RlpEncode())
 		bm.writeBlockInfo(bm.CurrentBlock)
+
+		log.Println(bm.CurrentBlock)
 	}
 
 	// Set the last known block number based on the blockchains last block

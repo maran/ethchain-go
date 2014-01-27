@@ -272,13 +272,13 @@ func (block *Block) String() string {
 func (block *Block) header(txSha []byte, uncleSha []byte) []interface{} {
 	return []interface{}{
 		// Sha of the previous block
-		[]byte(block.PrevHash),
+		block.PrevHash,
 		// Sha of uncles
 		uncleSha,
 		// Coinbase address
-		[]byte(block.Coinbase),
+		block.Coinbase,
 		// root state
-		[]byte(block.state.Root),
+		block.state.Root,
 		// Sha of tx
 		txSha,
 		// Current block Difficulty

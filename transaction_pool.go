@@ -16,6 +16,8 @@ const (
 	txPoolQueueSize = 50
 )
 
+type TxPoolHook chan *Transaction
+
 func FindTx(pool *list.List, finder func(*Transaction, *list.Element) bool) *Transaction {
 	for e := pool.Front(); e != nil; e = e.Next() {
 		if tx, ok := e.Value.(*Transaction); ok {
@@ -51,6 +53,8 @@ type TxPool struct {
 	pool *list.List
 
 	BlockManager *BlockManager
+
+	Hook TxPoolHook
 }
 
 func NewTxPool() *TxPool {
@@ -195,6 +199,10 @@ out:
 				// Call blocking version. At this point it
 				// doesn't matter since this is a goroutine
 				pool.addTransaction(tx)
+
+				if pool.Hook != nil {
+					pool.Hook <- tx
+				}
 			}
 		case <-pool.quit:
 			break out
