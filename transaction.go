@@ -1,7 +1,6 @@
 package ethchain
 
 import (
-	"fmt"
 	"github.com/ethereum/ethutil-go"
 	"github.com/obscuren/secp256k1-go"
 	"math/big"
