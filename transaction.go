@@ -1,6 +1,7 @@
 package ethchain
 
 import (
+	"fmt"
 	"github.com/ethereum/ethutil-go"
 	"github.com/obscuren/secp256k1-go"
 	"math/big"
@@ -83,15 +84,15 @@ func (tx *Transaction) IsContract() bool {
 
 func (tx *Transaction) Signature(key []byte) []byte {
 	hash := ethutil.Sha3Bin(tx.Hash())
-	sec := ethutil.Sha3Bin(key)
 
-	sig, _ := secp256k1.Sign(hash, sec)
+	sig, _ := secp256k1.Sign(hash, key)
 
 	return sig
 }
 
 func (tx *Transaction) PublicKey() []byte {
 	hash := ethutil.Sha3Bin(tx.Hash())
+
 	sig := append(tx.r, tx.s...)
 	sig = append(sig, tx.v-27)
 
