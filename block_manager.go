@@ -19,42 +19,16 @@ func CalculateBlockReward(block *Block, uncleLength int) *big.Int {
 	return big.NewInt(1000000000)
 }
 
-type BlockChain struct {
-	// The famous, the fabulous Mister GENESIIIIIIS (block)
-	genesisBlock *Block
-	// Last known total difficulty
-	TD *big.Int
-}
-
-func NewBlockChain() *BlockChain {
-	bc := &BlockChain{}
-	bc.genesisBlock = NewBlockFromData(ethutil.Encode(Genesis))
-
-	// Set the last know difficulty (might be 0x0 as initial value, Genesis)
-	bc.TD = ethutil.BigD(ethutil.Config.Db.LastKnownTD())
-
-	return bc
-}
-
-func (bc *BlockChain) HasBlock(hash string) bool {
-	data, _ := ethutil.Config.Db.Get([]byte(hash))
-	return len(data) != 0
-}
-
-func (bc *BlockChain) GenesisBlock() *Block {
-	return bc.genesisBlock
-}
-
 type BlockManager struct {
 	//server *Server
 	// The block chain :)
 	bc *BlockChain
 
 	// Last known block number
-	LastBlockNumber *big.Int
-	LastBlockHash   []byte
+	//LastBlockNumber uint64
+	//LastBlockHash   []byte
 
-	CurrentBlock *Block
+	//CurrentBlock *Block
 
 	// Stack for processing contracts
 	stack *Stack
@@ -81,20 +55,9 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 	// TODO Find the last block
 
 	// For now always the case
-	if bm.CurrentBlock == nil {
-		// Prepare the genesis block
-		bm.LastBlockNumber = big.NewInt(0)
-		bm.CurrentBlock = bm.bc.genesisBlock
-		bm.LastBlockHash = bm.bc.genesisBlock.Hash()
-
-		ethutil.Config.Db.Put(bm.CurrentBlock.Hash(), bm.CurrentBlock.RlpEncode())
-		bm.writeBlockInfo(bm.CurrentBlock)
-
-		log.Println(bm.CurrentBlock)
+	if bm.bc.CurrentBlock == nil {
+		bm.bc.Add(bm.bc.genesisBlock)
 	}
-
-	// Set the last known block number based on the blockchains last block
-	bm.LastBlockNumber = bm.BlockInfo(bm.CurrentBlock).Number
 
 	return bm
 }
@@ -110,12 +73,13 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 
 // Block processing and validating with a given (temporarily) state
 func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie) error {
-	if bm.bc.HasBlock(string(block.Hash())) {
+	hash := block.Hash()
+	if bm.bc.HasBlock(hash) {
 		return nil
 	}
 
 	if ethutil.Config.Debug {
-		log.Println("[BMGR] Processing block")
+		log.Printf("[BMGR] Processing block(%x)\n", hash)
 	}
 
 	// Check if we have the parent hash, if it isn't known we discard it
@@ -130,7 +94,7 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 		//blockData, _ := ethutil.Config.Db.Get([]byte(block.PrevHash))
 		// Set the previous block as the processor when processing
 		// Txs and contracts
-		processor = bm.CurrentBlock //NewBlockFromData(blockData)
+		processor = bm.bc.CurrentBlock //NewBlockFromData(blockData)
 		// Set the state for processing
 		state = processor.State()
 	} else {
@@ -176,9 +140,14 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 
 	// Calculate the new total difficulty and sync back to the db
 	if bm.CalculateTD(block) {
-		ethutil.Config.Db.Put(block.Hash(), block.RlpEncode())
-		bm.CurrentBlock = block
-		bm.LastBlockHash = block.Hash()
+		bm.bc.Add(block)
+
+		/*
+			ethutil.Config.Db.Put(block.Hash(), block.RlpEncode())
+			bm.bc.CurrentBlock = block
+			bm.LastBlockHash = block.Hash()
+			bm.writeBlockInfo(block)
+		*/
 
 		/*
 			txs := bm.TransactionPool.Flush()
@@ -192,7 +161,7 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 		*/
 
 		// Broadcast the valid block back to the wire
-		bm.Speaker.Broadcast(ethwire.MsgBlockTy, block.RlpData())
+		bm.Speaker.Broadcast(ethwire.MsgBlockTy, []interface{}{block.RlpData()})
 		/*
 			if len(coded) != 0 {
 					bm.Speaker.Broadcast(ethwire.MsgTxTy, coded)
@@ -242,7 +211,7 @@ func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
 	// Check each uncle's previous hash. In order for it to be valid
 	// is if it has the same block hash as the current
 	for _, uncle := range block.Uncles {
-		if uncle.PrevHash != block.PrevHash {
+		if bytes.Compare(uncle.PrevHash, block.PrevHash) != 0 {
 			//if Debug {
 			//		log.Printf("Uncle prvhash mismatch %x %x\n", block.PrevHash, uncle.PrevHash)
 			//	}
@@ -251,7 +220,7 @@ func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
 		}
 	}
 
-	diff := block.Time - bm.CurrentBlock.Time
+	diff := block.Time - bm.bc.CurrentBlock.Time
 	if diff < 0 {
 		return fmt.Errorf("Block timestamp less then prev block %v", diff)
 	}
@@ -312,28 +281,12 @@ func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block, lockChan 
 	lockChan <- true
 }
 
-func (bm *BlockManager) BlockInfo(block *Block) BlockInfo {
-	bi := BlockInfo{}
-	data, _ := ethutil.Config.Db.Get(append(block.Hash(), []byte("Info")...))
-	bi.RlpDecode(data)
-
-	return bi
-}
-
-// Unexported method for writing extra non-essential block info to the db
-func (bm *BlockManager) writeBlockInfo(block *Block) {
-	bi := BlockInfo{Number: bm.LastBlockNumber.Add(bm.LastBlockNumber, big.NewInt(1))}
-
-	// For now we use the block hash with the words "info" appended as key
-	ethutil.Config.Db.Put(append(block.Hash(), []byte("Info")...), bi.RlpEncode())
-}
-
 // Contract evaluation is done here.
 func (bm *BlockManager) ProcContract(tx *Transaction, block *Block, cb TxCallback) {
 
 	// Instruction pointer
 	pc := 0
-	blockInfo := bm.BlockInfo(block)
+	blockInfo := bm.bc.BlockInfo(block)
 
 	contract := block.GetContract(tx.Hash())
 	if contract == nil {
@@ -500,13 +453,13 @@ out:
 				bm.stack.Push(ethutil.Big(tx.Data[v.Uint64()]))
 			}
 		case oBLK_PREVHASH:
-			bm.stack.Push(ethutil.Big(block.PrevHash))
+			bm.stack.Push(ethutil.BigD(block.PrevHash))
 		case oBLK_COINBASE:
 			bm.stack.Push(ethutil.Big(block.Coinbase))
 		case oBLK_TIMESTAMP:
 			bm.stack.Push(big.NewInt(block.Time))
 		case oBLK_NUMBER:
-			bm.stack.Push(blockInfo.Number)
+			bm.stack.Push(big.NewInt(int64(blockInfo.Number)))
 		case oBLK_DIFFICULTY:
 			bm.stack.Push(block.Difficulty)
 		case oBASEFEE:
