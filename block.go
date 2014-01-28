@@ -8,21 +8,23 @@ import (
 )
 
 type BlockInfo struct {
-	Number *big.Int
+	Number uint64
+	Hash   []byte
 }
 
 func (bi *BlockInfo) RlpDecode(data []byte) {
 	decoder := ethutil.NewRlpDecoder(data)
-	bi.Number = decoder.Get(0).AsBigInt()
+	bi.Number = decoder.Get(0).AsUint()
+	bi.Hash = decoder.Get(1).AsBytes()
 }
 
 func (bi *BlockInfo) RlpEncode() []byte {
-	return ethutil.Encode([]interface{}{bi.Number})
+	return ethutil.Encode([]interface{}{bi.Number, bi.Hash})
 }
 
 type Block struct {
 	// Hash to the previous block
-	PrevHash string
+	PrevHash []byte
 	// Uncles of this block
 	Uncles   []*Block
 	UncleSha []byte
@@ -64,7 +66,7 @@ func CreateTestBlock( /* TODO use raw data */ transactions []*Transaction) *Bloc
 	block := &Block{
 		// Slice of transactions to include in this block
 		transactions: transactions,
-		PrevHash:     "1234",
+		PrevHash:     []byte("1234"),
 		Coinbase:     "me",
 		Difficulty:   big.NewInt(10),
 		Nonce:        ethutil.BigInt0,
@@ -85,7 +87,7 @@ func CreateBlock(root string,
 	block := &Block{
 		// Slice of transactions to include in this block
 		transactions: txes,
-		PrevHash:     string(prevHash),
+		PrevHash:     prevHash,
 		Coinbase:     base,
 		Difficulty:   Difficulty,
 		Nonce:        Nonce,
@@ -209,7 +211,7 @@ func (block *Block) RlpDecode(data []byte) {
 func (block *Block) RlpValueDecode(decoder *ethutil.RlpValue) {
 	header := decoder.Get(0)
 
-	block.PrevHash = header.Get(0).AsString()
+	block.PrevHash = header.Get(0).AsBytes()
 	block.UncleSha = header.Get(1).AsBytes()
 	block.Coinbase = header.Get(2).AsString()
 	block.state = ethutil.NewTrie(ethutil.Config.Db, header.Get(3).AsString())
