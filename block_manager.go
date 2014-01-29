@@ -235,7 +235,9 @@ func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
 		return errors.New("Block's nonce is invalid")
 	}
 
-	if block.State().Root != state.Root {
+	// FIXME
+	if !block.State().Cmp(state) {
+		//if block.State().Root != state.Root {
 		return fmt.Errorf("Invalid merkle root %x (%x)", block.State().Root, state.Root)
 	}
 

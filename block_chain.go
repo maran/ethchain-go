@@ -41,20 +41,24 @@ func (bc *BlockChain) GenesisBlock() *Block {
 // Get chain return blocks from hash up to max in RLP format
 func (bc *BlockChain) GetChainFromHash(hash []byte, max uint64) []interface{} {
 	var chain []interface{}
-	h := bc.CurrentBlock.Hash()
-	parentHash := hash // parent.Hash()
+	// Get the current hash to start with
+	currentHash := bc.CurrentBlock.Hash()
+	// Get the last number on the block chain
 	lastNumber := bc.BlockInfo(bc.CurrentBlock).Number
+	// Get the parents number
 	parentNumber := bc.BlockInfoByHash(hash).Number
+	// Get the min amount. We might not have max amount of blocks
 	count := uint64(math.Min(float64(lastNumber-parentNumber), float64(max)))
 	startNumber := parentNumber + count
 
 	num := lastNumber
-	for ; num > startNumber; h = bc.GetBlock(h).PrevHash {
+	for ; num > startNumber; currentHash = bc.GetBlock(currentHash).PrevHash {
 		num--
 	}
-	for i := uint64(0); bytes.Compare(h, parentHash) != 0 && num > parentNumber && i < count; i++ {
-		block := bc.GetBlock(h)
-		h = block.PrevHash
+	for i := uint64(0); bytes.Compare(currentHash, hash) != 0 && num > parentNumber && i < count; i++ {
+		// Get the block of the chain
+		block := bc.GetBlock(currentHash)
+		currentHash = block.PrevHash
 
 		chain = append(chain, block.RlpData())
 
@@ -64,6 +68,7 @@ func (bc *BlockChain) GetChainFromHash(hash []byte, max uint64) []interface{} {
 	return chain
 }
 
+// Add a block to the chain and record addition information
 func (bc *BlockChain) Add(block *Block) {
 	bc.writeBlockInfo(block)
 

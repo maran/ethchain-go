@@ -76,7 +76,7 @@ func CreateTestBlock( /* TODO use raw data */ transactions []*Transaction) *Bloc
 	return block
 }
 
-func CreateBlock(root string,
+func CreateBlock(root interface{},
 	prevHash []byte,
 	base string,
 	Difficulty *big.Int,
@@ -214,7 +214,7 @@ func (block *Block) RlpValueDecode(decoder *ethutil.RlpValue) {
 	block.PrevHash = header.Get(0).AsBytes()
 	block.UncleSha = header.Get(1).AsBytes()
 	block.Coinbase = header.Get(2).AsString()
-	block.state = ethutil.NewTrie(ethutil.Config.Db, header.Get(3).AsString())
+	block.state = ethutil.NewTrie(ethutil.Config.Db, header.Get(3).AsRaw())
 	block.TxSha = header.Get(4).AsBytes()
 	block.Difficulty = header.Get(5).AsBigInt()
 	block.Time = int64(header.Get(6).AsUint())
