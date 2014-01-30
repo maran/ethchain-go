@@ -29,6 +29,27 @@ func NewBlockChain() *BlockChain {
 	return bc
 }
 
+func (bc *BlockChain) NewBlock(coinbase string, txs []*Transaction) *Block {
+	var root interface{}
+	var hash []byte
+
+	if bc.CurrentBlock != nil {
+		root = bc.CurrentBlock.State().Root
+		hash = bc.LastBlockHash
+	}
+
+	block := CreateBlock(
+		root,
+		hash,
+		coinbase,
+		ethutil.BigPow(2, 32),
+		big.NewInt(0),
+		"",
+		txs)
+
+	return block
+}
+
 func (bc *BlockChain) HasBlock(hash []byte) bool {
 	data, _ := ethutil.Config.Db.Get(hash)
 	return len(data) != 0

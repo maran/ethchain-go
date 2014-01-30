@@ -33,7 +33,7 @@ func NewTransaction(to string, value *big.Int, data []string) *Transaction {
 
 	if ethutil.Config.Debug {
 		// TMP
-		tx.Sign([]byte("privkey"))
+		tx.Sign([]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 	}
 
 	return &tx
@@ -82,7 +82,8 @@ func (tx *Transaction) IsContract() bool {
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {
-	hash := ethutil.Sha3Bin(tx.Hash())
+	h := tx.Hash()
+	hash := ethutil.Sha3Bin(h)
 
 	sig, _ := secp256k1.Sign(hash, key)
 
@@ -104,7 +105,7 @@ func (tx *Transaction) Sender() []byte {
 	pubkey := tx.PublicKey()
 
 	// Validate the returned key.
-	// Return nil if public key isn't in full format (04 = full, 03 = compact)
+	// Return nil if public key isn't in full format
 	if pubkey[0] != 4 {
 		return nil
 	}

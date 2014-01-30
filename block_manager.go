@@ -52,13 +52,6 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 		Speaker: speaker,
 	}
 
-	// TODO Find the last block
-
-	// For now always the case
-	if bm.bc.CurrentBlock == nil {
-		bm.bc.Add(bm.bc.genesisBlock)
-	}
-
 	return bm
 }
 
@@ -231,7 +224,7 @@ func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
 	}
 
 	// Verify the nonce of the block. Return an error if it's not valid
-	if !bm.Pow.Verify(ethutil.BigD(block.Hash()), block.Difficulty, block.Nonce) {
+	if !bm.Pow.Verify(block.Hash(), block.Difficulty, block.Nonce) {
 		return errors.New("Block's nonce is invalid")
 	}
 

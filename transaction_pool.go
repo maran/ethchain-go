@@ -74,7 +74,7 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 	pool.mutex.Unlock()
 
 	// Broadcast the transaction to the rest of the peers
-	pool.Speaker.Broadcast(ethwire.MsgTxTy, tx.RlpData())
+	pool.Speaker.Broadcast(ethwire.MsgTxTy, []interface{}{tx.RlpData()})
 }
 
 // Process transaction validates the Tx and processes funds from the

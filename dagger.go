@@ -11,20 +11,41 @@ import (
 )
 
 type PoW interface {
-	Search(hash, diff *big.Int) *big.Int
-	Verify(hash, diff, nonce *big.Int) bool
+	Search(block *Block) *big.Int
+	Verify(hash []byte, diff, nonce *big.Int) bool
 }
 
 type EasyPow struct {
 	hash *big.Int
 }
 
-func (pow *EasyPow) Search(hash, diff *big.Int) *big.Int {
+func (pow *EasyPow) Search(block *Block) *big.Int {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	header, _, _ := block.Make()
+	hash := ethutil.Encode(header)
+	diff := block.Difficulty
+	for i := 0; i < 1000; i++ {
+		rnd := big.NewInt(r.Int63())
+		if pow.Verify(hash, diff, rnd) {
+			return rnd
+		}
+	}
+
 	return nil
 }
 
-func (pow *EasyPow) Verify(hash, diff, nonce *big.Int) bool {
-	return true
+func (pow *EasyPow) Verify(hash []byte, diff, nonce *big.Int) bool {
+	sha := sha3.NewKeccak256()
+	sha2 := sha3.NewKeccak256()
+	sha2.Write(hash)
+	sha.Write(sha2.Sum(nil))
+	sha.Write(nonce.Bytes())
+
+	v := ethutil.BigPow(2, 256)
+	ret := new(big.Int)
+
+	return ethutil.BigD(sha.Sum(nil)).Cmp(ret.Div(v, diff)) <= 1
 }
 
 func (pow *EasyPow) SetHash(hash *big.Int) {
