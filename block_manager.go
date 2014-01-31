@@ -52,6 +52,18 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 		Speaker: speaker,
 	}
 
+	if bm.bc.CurrentBlock == nil {
+		// Prepare the genesis block
+		//bm.bc.LastBlockNumber = big.NewInt(0)
+		//bm.bc.CurrentBlock = bm.bc.genesisBlock
+		//bm.bc.LastBlockHash = bm.bc.genesisBlock.Hash()
+		//
+		//ethutil.Config.Db.Put(bm.CurrentBlock.Hash(), bm.CurrentBlock.RlpEncode())
+		//bm.writeBlockInfo(bm.CurrentBlock)
+
+		bm.bc.Add(bm.bc.genesisBlock)
+	}
+
 	return bm
 }
 
@@ -77,7 +89,7 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 
 	// Check if we have the parent hash, if it isn't known we discard it
 	// Reasons might be catching up or simply an invalid block
-	if !bm.bc.HasBlock(block.PrevHash) {
+	if !bm.bc.HasBlock(block.PrevHash) && bm.bc.CurrentBlock != nil {
 		return fmt.Errorf("Block's parent unknown %x", block.PrevHash)
 	}
 

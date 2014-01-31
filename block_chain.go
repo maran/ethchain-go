@@ -32,10 +32,12 @@ func NewBlockChain() *BlockChain {
 func (bc *BlockChain) NewBlock(coinbase string, txs []*Transaction) *Block {
 	var root interface{}
 	var hash []byte
+	var lastBlockTime int64
 
 	if bc.CurrentBlock != nil {
 		root = bc.CurrentBlock.State().Root
 		hash = bc.LastBlockHash
+		lastBlockTime = bc.CurrentBlock.Time
 	}
 
 	block := CreateBlock(
@@ -46,6 +48,22 @@ func (bc *BlockChain) NewBlock(coinbase string, txs []*Transaction) *Block {
 		big.NewInt(0),
 		"",
 		txs)
+
+	if bc.CurrentBlock != nil {
+		var mul *big.Int
+		if block.Time < lastBlockTime+42 {
+			mul = big.NewInt(1)
+		} else {
+			mul = big.NewInt(-1)
+		}
+
+		diff := new(big.Int)
+		diff.Add(diff, bc.CurrentBlock.Difficulty)
+		diff.Div(diff, big.NewInt(1024))
+		diff.Mul(diff, mul)
+		diff.Add(diff, bc.CurrentBlock.Difficulty)
+		block.Difficulty = diff
+	}
 
 	return block
 }

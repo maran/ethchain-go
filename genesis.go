@@ -2,6 +2,7 @@ package ethchain
 
 import (
 	"github.com/ethereum/ethutil-go"
+	_ "time"
 )
 
 /*
@@ -23,6 +24,7 @@ var GenisisHeader = []interface{}{
 	ethutil.BigPow(2, 26),
 	// Time
 	uint64(1),
+	//uint64(time.Now().Unix()),
 	// Nonce
 	ethutil.Big("0"),
 	// Extra
