@@ -23,7 +23,7 @@ func (c *Contract) RlpEncode() []byte {
 }
 
 func (c *Contract) RlpDecode(data []byte) {
-	decoder := ethutil.NewRlpDecoder(data)
+	decoder := ethutil.NewRlpValueFromBytes(data)
 
 	c.Amount = decoder.Get(0).AsBigInt()
 	c.Nonce = decoder.Get(1).AsUint()
@@ -59,7 +59,7 @@ func (a *Address) RlpEncode() []byte {
 }
 
 func (a *Address) RlpDecode(data []byte) {
-	decoder := ethutil.NewRlpDecoder(data)
+	decoder := ethutil.NewRlpValueFromBytes(data)
 
 	a.Amount = decoder.Get(1).AsBigInt()
 	a.Nonce = decoder.Get(2).AsUint()

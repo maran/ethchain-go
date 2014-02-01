@@ -139,7 +139,7 @@ func (tx *Transaction) RlpEncode() []byte {
 }
 
 func (tx *Transaction) RlpDecode(data []byte) {
-	decoder := ethutil.NewRlpDecoder(data)
+	decoder := ethutil.NewRlpValueFromBytes(data)
 
 	tx.Nonce = decoder.Get(0).AsUint()
 	tx.Recipient = decoder.Get(1).AsString()

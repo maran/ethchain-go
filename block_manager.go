@@ -2,6 +2,7 @@ package ethchain
 
 import (
 	"bytes"
+	_ "encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/ethereum/ethutil-go"
@@ -54,14 +55,16 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 
 	if bm.bc.CurrentBlock == nil {
 		// Prepare the genesis block
-		//bm.bc.LastBlockNumber = big.NewInt(0)
-		//bm.bc.CurrentBlock = bm.bc.genesisBlock
-		//bm.bc.LastBlockHash = bm.bc.genesisBlock.Hash()
-		//
-		//ethutil.Config.Db.Put(bm.CurrentBlock.Hash(), bm.CurrentBlock.RlpEncode())
-		//bm.writeBlockInfo(bm.CurrentBlock)
-
 		bm.bc.Add(bm.bc.genesisBlock)
+		log.Printf("++ GENESIS ++\n%s", bm.bc.CurrentBlock)
+
+		/*
+			codedAddr, _ := hex.DecodeString("82c3b0b72cf62f1a9ce97c64da8072efa28225d8")
+			addr := bm.bc.CurrentBlock.GetAddr(codedAddr)
+			addr.Amount = ethutil.BigPow(10, 18)
+			bm.bc.CurrentBlock.State().Update(string(codedAddr), string(addr.RlpEncode()))
+			fmt.Println(addr)
+		*/
 	}
 
 	return bm
@@ -166,7 +169,7 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 		*/
 
 		// Broadcast the valid block back to the wire
-		bm.Speaker.Broadcast(ethwire.MsgBlockTy, []interface{}{block.RlpData()})
+		bm.Speaker.Broadcast(ethwire.MsgBlockTy, []interface{}{block.RlpValue().Value})
 		/*
 			if len(coded) != 0 {
 					bm.Speaker.Broadcast(ethwire.MsgTxTy, coded)
@@ -251,13 +254,13 @@ func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
 
 func (bm *BlockManager) AccumelateRewards(block *Block, state *ethutil.Trie) error {
 	// Get the coinbase rlp data
-	d := state.Get(block.Coinbase)
+	d := state.Get(string(block.Coinbase))
 
 	ether := NewAddressFromData([]byte(d))
 
 	// Reward amount of ether to the coinbase address
 	ether.AddFee(CalculateBlockReward(block, len(block.Uncles)))
-	state.Update(block.Coinbase, string(ether.RlpEncode()))
+	state.Update(string(block.Coinbase), string(ether.RlpEncode()))
 
 	// TODO Reward each uncle
 
@@ -462,7 +465,7 @@ out:
 		case oBLK_PREVHASH:
 			bm.stack.Push(ethutil.BigD(block.PrevHash))
 		case oBLK_COINBASE:
-			bm.stack.Push(ethutil.Big(block.Coinbase))
+			bm.stack.Push(ethutil.BigD(block.Coinbase))
 		case oBLK_TIMESTAMP:
 			bm.stack.Push(big.NewInt(block.Time))
 		case oBLK_NUMBER:
@@ -557,7 +560,7 @@ out:
 			// Load the value in storage and push it on the stack
 			x := bm.stack.Pop()
 			// decode the object as a big integer
-			decoder := ethutil.NewRlpDecoder([]byte(contract.State().Get(x.String())))
+			decoder := ethutil.NewRlpValueFromBytes([]byte(contract.State().Get(x.String())))
 			if !decoder.IsNil() {
 				bm.stack.Push(decoder.AsBigInt())
 			} else {
@@ -622,7 +625,7 @@ func getContractMemory(block *Block, contractAddr []byte, memAddr *big.Int) *big
 	val := contract.State().Get(memAddr.String())
 
 	// decode the object as a big integer
-	decoder := ethutil.NewRlpDecoder([]byte(val))
+	decoder := ethutil.NewRlpValueFromBytes([]byte(val))
 	if decoder.IsNil() {
 		return ethutil.BigFalse
 	}

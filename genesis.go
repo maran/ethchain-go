@@ -2,31 +2,33 @@ package ethchain
 
 import (
 	"github.com/ethereum/ethutil-go"
-	_ "time"
 )
 
 /*
  * This is the special genesis block.
  */
 
+var ZeroHash256 = make([]byte, 32)
+var ZeroHash160 = make([]byte, 20)
+var EmptyShaList = ethutil.Sha3Bin(ethutil.Encode([]interface{}{}))
+
 var GenisisHeader = []interface{}{
 	// Previous hash (none)
 	"",
 	// Sha of uncles
-	string(ethutil.Sha3Bin(ethutil.Encode([]interface{}{}))),
+	EmptyShaList,
 	// Coinbase
 	"",
 	// Root state
 	"",
 	// Sha of transactions
-	string(ethutil.Sha3Bin(ethutil.Encode([]interface{}{}))),
+	EmptyShaList,
 	// Difficulty
-	ethutil.BigPow(2, 26),
+	ethutil.BigPow(2, 32),
 	// Time
-	uint64(1),
-	//uint64(time.Now().Unix()),
+	uint64(0),
 	// Nonce
-	ethutil.Big("0"),
+	nil,
 	// Extra
 	"",
 }

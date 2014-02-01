@@ -13,7 +13,7 @@ type BlockInfo struct {
 }
 
 func (bi *BlockInfo) RlpDecode(data []byte) {
-	decoder := ethutil.NewRlpDecoder(data)
+	decoder := ethutil.NewRlpValueFromBytes(data)
 	bi.Number = decoder.Get(0).AsUint()
 	bi.Hash = decoder.Get(1).AsBytes()
 }
@@ -29,7 +29,7 @@ type Block struct {
 	Uncles   []*Block
 	UncleSha []byte
 	// The coin base address
-	Coinbase string
+	Coinbase []byte
 	// Block Trie state
 	state *ethutil.Trie
 	// Difficulty for the current block
@@ -42,7 +42,7 @@ type Block struct {
 	transactions []*Transaction
 	TxSha        []byte
 	// Extra (unused)
-	extra string
+	Extra string
 }
 
 // New block takes a raw encoded string
@@ -67,7 +67,7 @@ func CreateTestBlock( /* TODO use raw data */ transactions []*Transaction) *Bloc
 		// Slice of transactions to include in this block
 		transactions: transactions,
 		PrevHash:     []byte("1234"),
-		Coinbase:     "me",
+		Coinbase:     ZeroHash160,
 		Difficulty:   big.NewInt(10),
 		Nonce:        ethutil.BigInt0,
 		Time:         time.Now().Unix(),
@@ -78,7 +78,7 @@ func CreateTestBlock( /* TODO use raw data */ transactions []*Transaction) *Bloc
 
 func CreateBlock(root interface{},
 	prevHash []byte,
-	base string,
+	base []byte,
 	Difficulty *big.Int,
 	Nonce *big.Int,
 	extra string,
@@ -92,7 +92,10 @@ func CreateBlock(root interface{},
 		Difficulty:   Difficulty,
 		Nonce:        Nonce,
 		Time:         time.Now().Unix(),
-		extra:        extra,
+		Extra:        extra,
+		UncleSha:     EmptyShaList,
+		TxSha:        EmptyShaList,
+
 		// TODO
 		Uncles: []*Block{},
 	}
@@ -103,6 +106,12 @@ func CreateBlock(root interface{},
 	}
 
 	return block
+}
+
+// Returns a hash of the block
+func (block *Block) Hash() []byte {
+	//genesisHeader(8 items) is ["", sha3(rlp([])), "", "", sha3(rlp([])), 2^32, 0, ""]
+	return ethutil.Sha3Bin(ethutil.Encode([]interface{}{block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Extra}))
 }
 
 func (block *Block) State() *ethutil.Trie {
@@ -123,6 +132,19 @@ func (block *Block) GetContract(addr []byte) *Contract {
 	contract.RlpDecode([]byte(data))
 
 	return contract
+}
+
+func (block *Block) GetAddr(addr []byte) *Address {
+	var address *Address
+
+	data := block.State().Get(string(addr))
+	if data == "" {
+		address = NewAddress(big.NewInt(0))
+	} else {
+		address = NewAddressFromData([]byte(data))
+	}
+
+	return address
 }
 
 func (block *Block) UpdateContract(addr []byte, contract *Contract) {
@@ -163,12 +185,22 @@ func (block *Block) BlockInfo() BlockInfo {
 	return bi
 }
 
-// Returns a hash of the block
-func (block *Block) Hash() []byte {
-	header, _, _ := block.Make()
-	return ethutil.Sha3Bin(ethutil.Encode(header))
+func (block *Block) MakeContract(tx *Transaction) {
+	// Create contract if there's no recipient
+	if tx.IsContract() {
+		addr := tx.Hash()
+
+		value := tx.Value
+		contract := NewContract(value, []byte(""))
+		block.state.Update(string(addr), string(contract.RlpEncode()))
+		for i, val := range tx.Data {
+			contract.state.Update(string(ethutil.NumberToBytes(uint64(i), 32)), val)
+		}
+		block.UpdateContract(addr, contract)
+	}
 }
 
+/////// Block Encoding
 func (block *Block) Make() (interface{}, []string, interface{}) {
 	// Marshal the transactions of this block
 	encTx := make([]string, len(block.transactions))
@@ -176,35 +208,35 @@ func (block *Block) Make() (interface{}, []string, interface{}) {
 		// Cast it to a string (safe)
 		encTx[i] = string(tx.RlpEncode())
 	}
-	tsha := ethutil.Sha3Bin([]byte(ethutil.Encode(encTx)))
+	block.TxSha = ethutil.Sha3Bin([]byte(ethutil.Encode(encTx)))
 
 	uncles := make([]interface{}, len(block.Uncles))
 	for i, uncle := range block.Uncles {
-		uncles[i] = uncle.uncleHeader()
+		uncles[i] = uncle.header()
 	}
 
 	// Sha of the concatenated uncles
-	usha := ethutil.Sha3Bin(ethutil.Encode(uncles))
+	block.UncleSha = ethutil.Sha3Bin(ethutil.Encode(uncles))
 
-	return block.header(tsha, usha), encTx, uncles
+	return block.header(), encTx, uncles
 }
 
-func (block *Block) RlpData() interface{} {
+func (block *Block) RlpValue() *ethutil.RlpValue {
 	// The block header
 	header, encTx, uncles := block.Make()
 
-	return []interface{}{header, encTx, uncles}
+	return ethutil.NewRlpValue([]interface{}{header, encTx, uncles})
 }
 
 func (block *Block) RlpEncode() []byte {
 
 	// Encode a slice interface which contains the header and the list of
 	// transactions.
-	return ethutil.Encode(block.RlpData())
+	return ethutil.Encode(block.RlpValue().Encode())
 }
 
 func (block *Block) RlpDecode(data []byte) {
-	rlpValue := ethutil.NewRlpDecoder(data)
+	rlpValue := ethutil.NewRlpValueFromBytes(data)
 	block.RlpValueDecode(rlpValue)
 }
 
@@ -213,7 +245,7 @@ func (block *Block) RlpValueDecode(decoder *ethutil.RlpValue) {
 
 	block.PrevHash = header.Get(0).AsBytes()
 	block.UncleSha = header.Get(1).AsBytes()
-	block.Coinbase = header.Get(2).AsString()
+	block.Coinbase = header.Get(2).AsBytes()
 	block.state = ethutil.NewTrie(ethutil.Config.Db, header.Get(3).AsRaw())
 	block.TxSha = header.Get(4).AsBytes()
 	block.Difficulty = header.Get(5).AsBigInt()
@@ -251,48 +283,12 @@ func (block *Block) RlpValueDecode(decoder *ethutil.RlpValue) {
 
 }
 
-func (block *Block) MakeContract(tx *Transaction) {
-	// Create contract if there's no recipient
-	if tx.IsContract() {
-		addr := tx.Hash()
-
-		value := tx.Value
-		contract := NewContract(value, []byte(""))
-		block.state.Update(string(addr), string(contract.RlpEncode()))
-		for i, val := range tx.Data {
-			contract.state.Update(string(ethutil.NumberToBytes(uint64(i), 32)), val)
-		}
-		block.UpdateContract(addr, contract)
-	}
-}
-
 func (block *Block) String() string {
-	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%v\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%d", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce)
+	return fmt.Sprintf("Block(%x):\nPrevHash:%x\nUncleSha:%x\nCoinbase:%x\nRoot:%x\nTxSha:%x\nDiff:%v\nTime:%d\nNonce:%d", block.Hash(), block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Nonce)
 }
 
 //////////// UNEXPORTED /////////////////
-func (block *Block) header(txSha []byte, uncleSha []byte) []interface{} {
-	return []interface{}{
-		// Sha of the previous block
-		block.PrevHash,
-		// Sha of uncles
-		uncleSha,
-		// Coinbase address
-		block.Coinbase,
-		// root state
-		block.state.Root,
-		// Sha of tx
-		txSha,
-		// Current block Difficulty
-		block.Difficulty,
-		// Time the block was found?
-		uint64(block.Time),
-		// Block's Nonce for validation
-		block.Nonce,
-	}
-}
-
-func (block *Block) uncleHeader() []interface{} {
+func (block *Block) header() []interface{} {
 	return []interface{}{
 		// Sha of the previous block
 		block.PrevHash,
@@ -310,5 +306,6 @@ func (block *Block) uncleHeader() []interface{} {
 		uint64(block.Time),
 		// Block's Nonce for validation
 		block.Nonce,
+		block.Extra,
 	}
 }

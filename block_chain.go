@@ -29,7 +29,7 @@ func NewBlockChain() *BlockChain {
 	return bc
 }
 
-func (bc *BlockChain) NewBlock(coinbase string, txs []*Transaction) *Block {
+func (bc *BlockChain) NewBlock(coinbase []byte, txs []*Transaction) *Block {
 	var root interface{}
 	var hash []byte
 	var lastBlockTime int64
@@ -99,7 +99,7 @@ func (bc *BlockChain) GetChainFromHash(hash []byte, max uint64) []interface{} {
 		block := bc.GetBlock(currentHash)
 		currentHash = block.PrevHash
 
-		chain = append(chain, block.RlpData())
+		chain = append(chain, block.RlpValue().Value)
 
 		num--
 	}
