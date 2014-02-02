@@ -31,7 +31,7 @@ func FindTx(pool *list.List, finder func(*Transaction, *list.Element) bool) *Tra
 }
 
 type PublicSpeaker interface {
-	Broadcast(msgType ethwire.MsgType, data interface{})
+	Broadcast(msgType ethwire.MsgType, data []interface{})
 }
 
 // The tx pool a thread safe transaction pool handler. In order to
