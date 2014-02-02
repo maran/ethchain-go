@@ -133,6 +133,9 @@ func (block *Block) GetContract(addr []byte) *Contract {
 
 	return contract
 }
+func (block *Block) UpdateContract(addr []byte, contract *Contract) {
+	block.state.Update(string(addr), string(contract.RlpEncode()))
+}
 
 func (block *Block) GetAddr(addr []byte) *Address {
 	var address *Address
@@ -146,9 +149,8 @@ func (block *Block) GetAddr(addr []byte) *Address {
 
 	return address
 }
-
-func (block *Block) UpdateContract(addr []byte, contract *Contract) {
-	block.state.Update(string(addr), string(contract.RlpEncode()))
+func (block *Block) UpdateAddr(addr []byte, address *Address) {
+	block.state.Update(string(addr), string(address.RlpEncode()))
 }
 
 func (block *Block) PayFee(addr []byte, fee *big.Int) bool {

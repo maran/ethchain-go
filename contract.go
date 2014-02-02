@@ -61,6 +61,6 @@ func (a *Address) RlpEncode() []byte {
 func (a *Address) RlpDecode(data []byte) {
 	decoder := ethutil.NewRlpValueFromBytes(data)
 
-	a.Amount = decoder.Get(1).AsBigInt()
-	a.Nonce = decoder.Get(2).AsUint()
+	a.Amount = decoder.Get(0).AsBigInt()
+	a.Nonce = decoder.Get(1).AsUint()
 }

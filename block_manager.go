@@ -2,7 +2,7 @@ package ethchain
 
 import (
 	"bytes"
-	_ "encoding/hex"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/ethereum/ethutil-go"
@@ -58,13 +58,10 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 		bm.bc.Add(bm.bc.genesisBlock)
 		log.Printf("++ GENESIS ++\n%s", bm.bc.CurrentBlock)
 
-		/*
-			codedAddr, _ := hex.DecodeString("82c3b0b72cf62f1a9ce97c64da8072efa28225d8")
-			addr := bm.bc.CurrentBlock.GetAddr(codedAddr)
-			addr.Amount = ethutil.BigPow(10, 18)
-			bm.bc.CurrentBlock.State().Update(string(codedAddr), string(addr.RlpEncode()))
-			fmt.Println(addr)
-		*/
+		codedAddr, _ := hex.DecodeString("93658b04240e4bd4046fd2d6d417d20f146f4b43")
+		addr := bm.bc.CurrentBlock.GetAddr(codedAddr)
+		addr.Amount = ethutil.BigPow(2, 32)
+		bm.bc.CurrentBlock.UpdateAddr(codedAddr, addr)
 	}
 
 	return bm
@@ -606,7 +603,7 @@ out:
 				j++
 			}
 			// TODO sign it?
-			tx := NewTransaction(string(addr.Bytes()), value, dataItems)
+			tx := NewTransaction(addr.Bytes(), value, dataItems)
 			// Add the transaction to the tx pool
 			bm.TransactionPool.QueueTransaction(tx)
 		case oSUICIDE:

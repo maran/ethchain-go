@@ -8,7 +8,7 @@ import (
 
 type Transaction struct {
 	Nonce     uint64
-	Recipient string
+	Recipient []byte
 	Value     *big.Int
 	Data      []string
 	Memory    []int
@@ -16,7 +16,7 @@ type Transaction struct {
 	r, s      []byte
 }
 
-func NewTransaction(to string, value *big.Int, data []string) *Transaction {
+func NewTransaction(to []byte, value *big.Int, data []string) *Transaction {
 	tx := Transaction{Recipient: to, Value: value}
 	tx.Nonce = 0
 
@@ -50,7 +50,7 @@ func NewTransactionFromRlpValue(rlpValue *ethutil.RlpValue) *Transaction {
 	tx := &Transaction{}
 
 	tx.Nonce = rlpValue.Get(0).AsUint()
-	tx.Recipient = rlpValue.Get(1).AsString()
+	tx.Recipient = rlpValue.Get(1).AsBytes()
 	tx.Value = rlpValue.Get(2).AsBigInt()
 
 	d := rlpValue.Get(3)
@@ -78,7 +78,7 @@ func (tx *Transaction) Hash() []byte {
 }
 
 func (tx *Transaction) IsContract() bool {
-	return tx.Recipient == ""
+	return len(tx.Recipient) == 0
 }
 
 func (tx *Transaction) Signature(key []byte) []byte {
@@ -142,7 +142,7 @@ func (tx *Transaction) RlpDecode(data []byte) {
 	decoder := ethutil.NewRlpValueFromBytes(data)
 
 	tx.Nonce = decoder.Get(0).AsUint()
-	tx.Recipient = decoder.Get(1).AsString()
+	tx.Recipient = decoder.Get(1).AsBytes()
 	tx.Value = decoder.Get(2).AsBigInt()
 
 	d := decoder.Get(3)

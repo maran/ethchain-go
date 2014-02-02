@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/ethutil-go"
 	"github.com/ethereum/ethwire-go"
 	"log"
-	"math/big"
 	"sync"
 )
 
@@ -82,19 +81,8 @@ func (pool *TxPool) addTransaction(tx *Transaction) {
 func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) error {
 	log.Printf("[TXPL] Processing Tx %x\n", tx.Hash())
 
-	var sender, receiver *Address
-
 	// Get the sender
-	data := block.State().Get(string(tx.Sender()))
-	// If it doesn't exist create a new account. Of course trying to send funds
-	// from this account will fail since it will hold 0 Wei
-	if data == "" {
-		sender = NewAddress(big.NewInt(0))
-		// Create a new account for this sender
-		block.State().Update(string(tx.Sender()), string(sender.RlpEncode()))
-	} else {
-		sender = NewAddressFromData([]byte(data))
-	}
+	sender := block.GetAddr(tx.Sender())
 
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
@@ -114,21 +102,12 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) error {
 	sender.Nonce += 1
 
 	// Get the receiver
-	data = block.State().Get(tx.Recipient)
-	// If the receiver doesn't exist yet, create a new account to which the
-	// funds will be send.
-	if data == "" {
-		receiver = NewAddress(big.NewInt(0))
-		// Create a new account for the recipient
-		block.State().Update(tx.Recipient, string(receiver.RlpEncode()))
-	} else {
-		receiver = NewAddressFromData([]byte(data))
-	}
+	receiver := block.GetAddr(tx.Recipient)
 	// Add the amount to receivers account which should conclude this transaction
 	receiver.Amount.Add(receiver.Amount, tx.Value)
 
-	block.State().Update(string(tx.Sender()), string(sender.RlpEncode()))
-	block.State().Update(tx.Recipient, string(receiver.RlpEncode()))
+	block.UpdateAddr(tx.Sender(), sender)
+	block.UpdateAddr(tx.Recipient, receiver)
 
 	return nil
 }
@@ -142,17 +121,8 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 		return errors.New("No last block on the block chain")
 	}
 
-	var sender *Address
-
 	// Get the sender
-	data := block.State().Get(string(tx.Sender()))
-	// If it doesn't exist create a new account. Of course trying to send funds
-	// from this account will fail since it will hold 0 Wei
-	if data == "" {
-		sender = NewAddress(big.NewInt(0))
-	} else {
-		sender = NewAddressFromData([]byte(data))
-	}
+	sender := block.GetAddr(tx.Sender())
 
 	// Make sure there's enough in the sender's account. Having insufficient
 	// funds won't invalidate this transaction but simple ignores it.
