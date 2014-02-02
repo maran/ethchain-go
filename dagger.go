@@ -47,8 +47,6 @@ func (pow *EasyPow) Verify(hash []byte, diff, nonce *big.Int) bool {
 	res := new(big.Int)
 	res.SetBytes(sha.Sum(nil))
 
-	//fmt.Println(res, "\n", ret)
-
 	//sha3(sha3(block header without nonce) ++ nonce) < 2^256 / diff
 	return res.Cmp(ret) == -1
 }
