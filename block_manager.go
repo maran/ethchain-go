@@ -43,6 +43,20 @@ type BlockManager struct {
 	Speaker PublicSpeaker
 }
 
+func AddTestNetFunds(block *Block) {
+	for _, addr := range []string{
+		"812413ae7e515a3bcaf7b3444116527bce958c02", // Gavin
+		"93658b04240e4bd4046fd2d6d417d20f146f4b43", // Jeffrey
+	} {
+		log.Println("2^200 Wei to", addr)
+		codedAddr, _ := hex.DecodeString(addr)
+		addr := block.GetAddr(codedAddr)
+		addr.Amount = ethutil.BigPow(2, 32)
+
+		block.UpdateAddr(codedAddr, addr)
+	}
+}
+
 func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 	bm := &BlockManager{
 		//server: s,
@@ -56,12 +70,9 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 	if bm.bc.CurrentBlock == nil {
 		// Prepare the genesis block
 		bm.bc.Add(bm.bc.genesisBlock)
-		log.Printf("++ GENESIS ++\n%s", bm.bc.CurrentBlock)
+		log.Printf("Genesis: %x\n", bm.bc.CurrentBlock.Hash()[:4])
 
-		codedAddr, _ := hex.DecodeString("93658b04240e4bd4046fd2d6d417d20f146f4b43")
-		addr := bm.bc.CurrentBlock.GetAddr(codedAddr)
-		addr.Amount = ethutil.BigPow(2, 32)
-		bm.bc.CurrentBlock.UpdateAddr(codedAddr, addr)
+		AddTestNetFunds(bm.bc.CurrentBlock)
 	}
 
 	return bm
@@ -107,6 +118,11 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 		processor = block
 	}
 
+	// Block validation
+	if err := bm.ValidateBlock(block, state); err != nil {
+		return err
+	}
+
 	// Get the tx count. Used to create enough channels to 'join' the go routines
 	txCount := len(block.Transactions())
 	// Locking channel. When it has been fully buffered this method will return
@@ -135,11 +151,6 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 	// I'm not sure, but I don't know if there should be thrown
 	// any errors at this time.
 	if err := bm.AccumelateRewards(block, state); err != nil {
-		return err
-	}
-
-	// Block validation
-	if err := bm.ValidateBlock(block, state); err != nil {
 		return err
 	}
 

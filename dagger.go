@@ -22,10 +22,9 @@ type EasyPow struct {
 func (pow *EasyPow) Search(block *Block) *big.Int {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	header, _, _ := block.Make()
-	hash := ethutil.Encode(header)
+	hash := block.Hash()
 	diff := block.Difficulty
-	for i := 0; i < 1000; i++ {
+	for {
 		rnd := big.NewInt(r.Int63())
 		if pow.Verify(hash, diff, rnd) {
 			return rnd
@@ -43,9 +42,15 @@ func (pow *EasyPow) Verify(hash []byte, diff, nonce *big.Int) bool {
 	sha.Write(nonce.Bytes())
 
 	v := ethutil.BigPow(2, 256)
-	ret := new(big.Int)
+	ret := new(big.Int).Div(v, diff)
 
-	return ethutil.BigD(sha.Sum(nil)).Cmp(ret.Div(v, diff)) <= 1
+	res := new(big.Int)
+	res.SetBytes(sha.Sum(nil))
+
+	//fmt.Println(res, "\n", ret)
+
+	//sha3(sha3(block header without nonce) ++ nonce) < 2^256 / diff
+	return res.Cmp(ret) == -1
 }
 
 func (pow *EasyPow) SetHash(hash *big.Int) {

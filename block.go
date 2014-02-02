@@ -111,7 +111,8 @@ func CreateBlock(root interface{},
 // Returns a hash of the block
 func (block *Block) Hash() []byte {
 	//genesisHeader(8 items) is ["", sha3(rlp([])), "", "", sha3(rlp([])), 2^32, 0, ""]
-	return ethutil.Sha3Bin(ethutil.Encode([]interface{}{block.PrevHash, block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Extra}))
+	return ethutil.Sha3Bin(ethutil.Encode([]interface{}{block.PrevHash,
+		block.UncleSha, block.Coinbase, block.state.Root, block.TxSha, block.Difficulty, block.Time, block.Extra}))
 }
 
 func (block *Block) State() *ethutil.Trie {
