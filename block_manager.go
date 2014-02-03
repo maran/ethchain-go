@@ -82,18 +82,15 @@ func (bm *BlockManager) BlockChain() *BlockChain {
 	return bm.bc
 }
 
-func (bm *BlockManager) ApplyTransactions(block *Block) {
+func (bm *BlockManager) ApplyTransactions(block *Block, txs []*Transaction) {
 	// Process each transaction/contract
-	for _, tx := range block.Transactions() {
+	for _, tx := range txs {
 		// If there's no recipient, it's a contract
 		if tx.IsContract() {
 			block.MakeContract(tx)
 			bm.ProcessContract(tx, block)
 		} else {
-			// "finish" tx which isn't a contract
-			go func() {
-				bm.TransactionPool.ProcessTransaction(tx, block)
-			}()
+			bm.TransactionPool.ProcessTransaction(tx, block)
 		}
 	}
 }
@@ -115,17 +112,20 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 		return fmt.Errorf("Block's parent unknown %x", block.PrevHash)
 	}
 
+	state := bm.bc.CurrentBlock.State()
+
 	// Block validation
-	if err := bm.ValidateBlock(block, block.State()); err != nil {
+	if err := bm.ValidateBlock(bm.bc.CurrentBlock, state); err != nil {
 		return err
 	}
 
-	bm.ApplyTransactions(block)
+	// Process the transactions on to current block
+	bm.ApplyTransactions(bm.bc.CurrentBlock, block.Transactions())
 
 	/* TODO TESTNET HAS NO REWARDS
 	// I'm not sure, but I don't know if there should be thrown
 	// any errors at this time.
-	if err := bm.AccumelateRewards(block, block.State()); err != nil {
+	if err := bm.AccumelateRewards(block, state); err != nil {
 		return err
 	}
 	*/

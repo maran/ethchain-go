@@ -94,11 +94,12 @@ func CreateBlock(root interface{},
 		Time:         time.Now().Unix(),
 		Extra:        extra,
 		UncleSha:     EmptyShaList,
-		TxSha:        EmptyShaList,
 
 		// TODO
 		Uncles: []*Block{},
 	}
+	block.SetTransactions(txes)
+
 	block.state = ethutil.NewTrie(ethutil.Config.Db, root)
 
 	for _, tx := range txes {
@@ -222,6 +223,18 @@ func (block *Block) Make() (interface{}, []string, interface{}) {
 	block.UncleSha = ethutil.Sha3Bin(ethutil.Encode(uncles))
 
 	return block.header(), encTx, uncles
+}
+
+func (block *Block) SetTransactions(txs []*Transaction) {
+	block.transactions = txs
+
+	// Marshal the transactions of this block
+	encTx := make([]string, len(block.transactions))
+	for i, tx := range block.transactions {
+		// Cast it to a string (safe)
+		encTx[i] = string(tx.RlpEncode())
+	}
+	block.TxSha = ethutil.Sha3Bin([]byte(ethutil.Encode(encTx)))
 }
 
 func (block *Block) RlpValue() *ethutil.RlpValue {

@@ -27,7 +27,7 @@ func (c *Contract) RlpDecode(data []byte) {
 
 	c.Amount = decoder.Get(0).AsBigInt()
 	c.Nonce = decoder.Get(1).AsUint()
-	c.state = ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).AsString())
+	c.state = ethutil.NewTrie(ethutil.Config.Db, decoder.Get(2).AsRaw())
 }
 
 func (c *Contract) State() *ethutil.Trie {
