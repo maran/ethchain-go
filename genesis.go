@@ -24,7 +24,7 @@ var GenisisHeader = []interface{}{
 	// Sha of transactions
 	EmptyShaList,
 	// Difficulty
-	ethutil.BigPow(2, 20),
+	ethutil.BigPow(2, 22),
 	// Time
 	uint64(0),
 	// Nonce
