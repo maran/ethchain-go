@@ -112,20 +112,18 @@ func (bm *BlockManager) ProcessBlock(block *Block) error {
 		return fmt.Errorf("Block's parent unknown %x", block.PrevHash)
 	}
 
-	state := bm.bc.CurrentBlock.State()
-
-	// Block validation
-	if err := bm.ValidateBlock(bm.bc.CurrentBlock, state); err != nil {
-		return err
-	}
-
 	// Process the transactions on to current block
 	bm.ApplyTransactions(bm.bc.CurrentBlock, block.Transactions())
+
+	// Block validation
+	if err := bm.ValidateBlock(block); err != nil {
+		return err
+	}
 
 	/* TODO TESTNET HAS NO REWARDS
 	// I'm not sure, but I don't know if there should be thrown
 	// any errors at this time.
-	if err := bm.AccumelateRewards(block, state); err != nil {
+	if err := bm.AccumelateRewards(block); err != nil {
 		return err
 	}
 	*/
@@ -196,7 +194,7 @@ func (bm *BlockManager) CalculateTD(block *Block) bool {
 // Validates the current block. Returns an error if the block was invalid,
 // an uncle or anything that isn't on the current block chain.
 // Validation validates easy over difficult (dagger takes longer time = difficult)
-func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
+func (bm *BlockManager) ValidateBlock(block *Block) error {
 	// TODO
 	// 2. Check if the difficulty is correct
 
@@ -223,28 +221,28 @@ func (bm *BlockManager) ValidateBlock(block *Block, state *ethutil.Trie) error {
 	}
 
 	// Verify the nonce of the block. Return an error if it's not valid
-	if !bm.Pow.Verify(block.Hash(), block.Difficulty, block.Nonce) {
+	if !bm.Pow.Verify(bm.bc.CurrentBlock.Hash(), block.Difficulty, block.Nonce) {
 		return errors.New("Block's nonce is invalid")
 	}
 
 	// FIXME
-	if !block.State().Cmp(state) {
+	if !block.State().Cmp(bm.bc.CurrentBlock.State()) {
 		//if block.State().Root != state.Root {
-		return fmt.Errorf("Invalid merkle root %x (%x)", block.State().Root, state.Root)
+		return fmt.Errorf("Invalid merkle root %x (%x)", block.State().Root, bm.bc.CurrentBlock.State().Root)
 	}
 
 	return nil
 }
 
-func (bm *BlockManager) AccumelateRewards(block *Block, state *ethutil.Trie) error {
+func (bm *BlockManager) AccumelateRewards(block *Block) error {
 	// Get the coinbase rlp data
-	d := state.Get(string(block.Coinbase))
+	d := bm.bc.CurrentBlock.State().Get(string(block.Coinbase))
 
 	ether := NewAddressFromData([]byte(d))
 
 	// Reward amount of ether to the coinbase address
 	ether.AddFee(CalculateBlockReward(block, len(block.Uncles)))
-	state.Update(string(block.Coinbase), string(ether.RlpEncode()))
+	bm.bc.CurrentBlock.State().Update(string(block.Coinbase), string(ether.RlpEncode()))
 
 	// TODO Reward each uncle
 
