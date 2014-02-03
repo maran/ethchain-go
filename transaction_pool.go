@@ -97,9 +97,6 @@ func (pool *TxPool) ProcessTransaction(tx *Transaction, block *Block) error {
 
 	// Subtract the amount from the senders account
 	sender.Amount.Sub(sender.Amount, tx.Value)
-	// Increment the nonce making each tx valid only once to prevent replay
-	// attacks
-	sender.Nonce += 1
 
 	// Get the receiver
 	receiver := block.GetAddr(tx.Recipient)
@@ -141,6 +138,11 @@ func (pool *TxPool) ValidateTransaction(tx *Transaction) error {
 			return fmt.Errorf("Invalid nonce %d(%d)", tx.Nonce, sender.Nonce)
 		}
 	}
+
+	// Increment the nonce making each tx valid only once to prevent replay
+	// attacks
+	sender.Nonce += 1
+	block.UpdateAddr(tx.Sender(), sender)
 
 	return nil
 }
