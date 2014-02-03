@@ -68,11 +68,12 @@ func NewBlockManager(speaker PublicSpeaker) *BlockManager {
 	}
 
 	if bm.bc.CurrentBlock == nil {
+		AddTestNetFunds(bm.bc.genesisBlock)
 		// Prepare the genesis block
 		bm.bc.Add(bm.bc.genesisBlock)
-		log.Printf("Genesis: %x\n", bm.bc.CurrentBlock.Hash()[:4])
 
-		AddTestNetFunds(bm.bc.CurrentBlock)
+		log.Printf("Genesis: %x\n", bm.bc.CurrentBlock.Hash())
+
 	}
 
 	return bm

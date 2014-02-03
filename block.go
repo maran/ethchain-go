@@ -248,7 +248,7 @@ func (block *Block) RlpEncode() []byte {
 
 	// Encode a slice interface which contains the header and the list of
 	// transactions.
-	return ethutil.Encode(block.RlpValue().Encode())
+	return block.RlpValue().Encode()
 }
 
 func (block *Block) RlpDecode(data []byte) {

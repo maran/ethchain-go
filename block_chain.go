@@ -2,6 +2,7 @@ package ethchain
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/ethereum/ethutil-go"
 	"math"
 	"math/big"
