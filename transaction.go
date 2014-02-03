@@ -93,7 +93,11 @@ func (tx *Transaction) Signature(key []byte) []byte {
 func (tx *Transaction) PublicKey() []byte {
 	hash := ethutil.Sha3Bin(tx.Hash())
 
-	sig := append(tx.r, tx.s...)
+	// If we don't make a copy we will overwrite the existing underlying array
+	dst := make([]byte, len(tx.r))
+	copy(dst, tx.r)
+
+	sig := append(dst, tx.s...)
 	sig = append(sig, tx.v-27)
 
 	pubkey, _ := secp256k1.RecoverPubkey(hash, sig)
