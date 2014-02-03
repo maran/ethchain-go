@@ -202,10 +202,6 @@ func (bm *BlockManager) ValidateBlock(block *Block) error {
 	// is if it has the same block hash as the current
 	for _, uncle := range block.Uncles {
 		if bytes.Compare(uncle.PrevHash, block.PrevHash) != 0 {
-			//if Debug {
-			//		log.Printf("Uncle prvhash mismatch %x %x\n", block.PrevHash, uncle.PrevHash)
-			//	}
-
 			return errors.New("Mismatching Prvhash from uncle")
 		}
 	}
@@ -221,11 +217,10 @@ func (bm *BlockManager) ValidateBlock(block *Block) error {
 	}
 
 	// Verify the nonce of the block. Return an error if it's not valid
-	if !bm.Pow.Verify(bm.bc.CurrentBlock.Hash(), block.Difficulty, block.Nonce) {
+	if !bm.Pow.Verify(block.Hash(), block.Difficulty, block.Nonce) {
 		return errors.New("Block's nonce is invalid")
 	}
 
-	// FIXME
 	if !block.State().Cmp(bm.bc.CurrentBlock.State()) {
 		//if block.State().Root != state.Root {
 		return fmt.Errorf("Invalid merkle root %x (%x)", block.State().Root, bm.bc.CurrentBlock.State().Root)
