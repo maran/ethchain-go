@@ -83,8 +83,6 @@ func (bm *BlockManager) BlockChain() *BlockChain {
 }
 
 func (bm *BlockManager) ApplyTransactions(block *Block) {
-	// Get the tx count. Used to create enough channels to 'join' the go routines
-	txCount := len(block.Transactions())
 	// Process each transaction/contract
 	for _, tx := range block.Transactions() {
 		// If there's no recipient, it's a contract
