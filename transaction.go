@@ -60,8 +60,8 @@ func NewTransactionFromRlpValue(rlpValue *ethutil.RlpValue) *Transaction {
 	}
 
 	tx.v = byte(rlpValue.Get(4).AsUint())
-	tx.r = []byte(rlpValue.Get(5).AsString())
-	tx.s = []byte(rlpValue.Get(6).AsString())
+	tx.r = rlpValue.Get(5).AsBytes()
+	tx.s = rlpValue.Get(6).AsBytes()
 
 	return tx
 }
@@ -153,6 +153,6 @@ func (tx *Transaction) RlpDecode(data []byte) {
 
 	// TODO something going wrong here
 	tx.v = byte(decoder.Get(4).AsUint())
-	tx.r = []byte(decoder.Get(5).AsString())
-	tx.s = []byte(decoder.Get(6).AsString())
+	tx.r = decoder.Get(5).AsBytes()
+	tx.s = decoder.Get(6).AsBytes()
 }

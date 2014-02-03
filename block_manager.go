@@ -82,13 +82,26 @@ func (bm *BlockManager) BlockChain() *BlockChain {
 	return bm.bc
 }
 
-// Helper for regularly block processing
-func (bm *BlockManager) ProcessBlock(block *Block) error {
-	return bm.ProcessBlockWithState(block, nil)
+func (bm *BlockManager) ApplyTransactions(block *Block) {
+	// Get the tx count. Used to create enough channels to 'join' the go routines
+	txCount := len(block.Transactions())
+	// Process each transaction/contract
+	for _, tx := range block.Transactions() {
+		// If there's no recipient, it's a contract
+		if tx.IsContract() {
+			block.MakeContract(tx)
+			bm.ProcessContract(tx, block)
+		} else {
+			// "finish" tx which isn't a contract
+			go func() {
+				bm.TransactionPool.ProcessTransaction(tx, block)
+			}()
+		}
+	}
 }
 
 // Block processing and validating with a given (temporarily) state
-func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie) error {
+func (bm *BlockManager) ProcessBlock(block *Block) error {
 	hash := block.Hash()
 	if bm.bc.HasBlock(hash) {
 		return nil
@@ -104,55 +117,20 @@ func (bm *BlockManager) ProcessBlockWithState(block *Block, state *ethutil.Trie)
 		return fmt.Errorf("Block's parent unknown %x", block.PrevHash)
 	}
 
-	var processor *Block
-	if state == nil {
-		// Get the last block
-		//blockData, _ := ethutil.Config.Db.Get([]byte(block.PrevHash))
-		// Set the previous block as the processor when processing
-		// Txs and contracts
-		processor = bm.bc.CurrentBlock //NewBlockFromData(blockData)
-		// Set the state for processing
-		state = processor.State()
-	} else {
-		// This is mostly used while mining blocks
-		processor = block
-	}
-
 	// Block validation
-	if err := bm.ValidateBlock(block, state); err != nil {
+	if err := bm.ValidateBlock(block, block.State()); err != nil {
 		return err
 	}
 
-	// Get the tx count. Used to create enough channels to 'join' the go routines
-	txCount := len(block.Transactions())
-	// Locking channel. When it has been fully buffered this method will return
-	lockChan := make(chan bool, txCount)
+	bm.ApplyTransactions(block)
 
-	// Process each transaction/contract
-	for _, tx := range block.Transactions() {
-		// If there's no recipient, it's a contract
-		if tx.IsContract() {
-			processor.MakeContract(tx)
-			go bm.ProcessContract(tx, block, lockChan)
-		} else {
-			// "finish" tx which isn't a contract
-			go func() {
-				bm.TransactionPool.ProcessTransaction(tx, processor)
-				lockChan <- true
-			}()
-		}
-	}
-
-	// Wait for all Tx to finish processing
-	for i := 0; i < txCount; i++ {
-		<-lockChan
-	}
-
+	/* TODO TESTNET HAS NO REWARDS
 	// I'm not sure, but I don't know if there should be thrown
 	// any errors at this time.
-	if err := bm.AccumelateRewards(block, state); err != nil {
+	if err := bm.AccumelateRewards(block, block.State()); err != nil {
 		return err
 	}
+	*/
 
 	// Calculate the new total difficulty and sync back to the db
 	if bm.CalculateTD(block) {
@@ -275,13 +253,11 @@ func (bm *BlockManager) AccumelateRewards(block *Block, state *ethutil.Trie) err
 	return nil
 }
 
-func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block, lockChan chan bool) {
+func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block) {
 	// Recovering function in case the VM had any errors
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Recovered from VM execution with err =", r)
-			// Let the channel know where done even though it failed (so the execution may resume normally)
-			lockChan <- true
 		}
 	}()
 
@@ -294,9 +270,6 @@ func (bm *BlockManager) ProcessContract(tx *Transaction, block *Block, lockChan 
 
 		return true // Continue
 	})
-
-	// Broadcast we're done
-	lockChan <- true
 }
 
 // Contract evaluation is done here.
